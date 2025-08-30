@@ -27,7 +27,6 @@ jobs:
           import json, pathlib, textwrap
           site = pathlib.Path("_site"); site.mkdir(parents=True, exist_ok=True)
 
-          # Manifest
           (site/"manifest.webmanifest").write_text(json.dumps({
             "name":"TK Tycoon Freight Deluxe",
             "short_name":"TK Tycoon",
@@ -42,13 +41,11 @@ jobs:
             ]
           }, indent=2), encoding="utf-8")
 
-          # Icons (placeholders)
           tiny = bytes.fromhex("89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C4890000000A49444154789C6360000002000154010A9B0000000049454E44AE426082")
           (site/"icon-192.png").write_bytes(tiny)
           (site/"icon-512.png").write_bytes(tiny)
           (site/"apple-touch-icon.png").write_bytes(tiny)
 
-          # Service Worker
           (site/"sw.js").write_text(textwrap.dedent("""\
             var CACHE='tktycoon-v6';
             var ASSETS=['./','./index.html','./style.css','./app.js','./manifest.webmanifest','./apple-touch-icon.png','./diag/index.html','./diag/diag.js','./diag/diag.css'];
@@ -71,7 +68,6 @@ jobs:
             });
           """), encoding="utf-8")
 
-          # Styles
           (site/"style.css").write_text(textwrap.dedent("""\
             :root{--bg:#0f1115;--panel:#141820;--line:#2a2f3a;--txt:#e6e6e6;--acc:#75c46b}
             *{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.4 system-ui,Segoe UI,Roboto}
@@ -93,7 +89,6 @@ jobs:
             .pill.primary{outline:2px solid var(--acc);border-color:transparent}
           """), encoding="utf-8")
 
-          # Index (iOS full-screen + install/update UI)
           (site/"index.html").write_text(textwrap.dedent("""\
             <!doctype html><html lang="fr"><head>
               <meta charset="utf-8">
@@ -198,7 +193,6 @@ jobs:
                   mode.textContent = 'Mode: ' + (isStandalone ? 'app' : 'web');
 
                   if(!isStandalone){
-                    // Android install banner
                     var deferred;
                     window.addEventListener('beforeinstallprompt',function(e){
                       e.preventDefault(); deferred=e; btnInstall.hidden=false;
@@ -209,8 +203,7 @@ jobs:
                     navigator.serviceWorker.register('./sw.js').then(function(reg){
                       if(reg.waiting){ btnUpdate.hidden=false; }
                       reg.addEventListener('updatefound',function(){
-                        var nw=reg.installing;
-                        if(!nw) return;
+                        var nw=reg.installing; if(!nw) return;
                         nw.addEventListener('statechange',function(){
                           if(nw.state==='installed' && navigator.serviceWorker.controller){
                             btnUpdate.hidden=false;
@@ -228,9 +221,7 @@ jobs:
             </body></html>
           """), encoding="utf-8")
 
-          # Gameplay (ES5 compatible iOS)
           (site/"app.js").write_text(textwrap.dedent(r"""\
-            // Basic error hook -> console (captured by CI) and localStorage
             (function(){
               var bucket = [];
               function flush(){ try{ localStorage.setItem('tktycoon_errors', JSON.stringify(bucket).slice(-5000)); }catch(e){} }
@@ -277,7 +268,6 @@ jobs:
               for(var e of S.roads.entries()){var k=e[0],v=e[1],xy=k.split('-'),A=C(xy[0]),B=C(xy[1]);ctx.lineWidth=2+v.lvl*1.5;ctx.strokeStyle=['#2b3b55','#4e86ff','#75c46b','#ffd166'][v.lvl];ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke();}
               for(var i=0;i<CITIES.length;i++){var c=CITIES[i];ctx.fillStyle="#1f2937";ctx.beginPath();ctx.arc(c.x,c.y,18,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#4b5563";ctx.stroke();ctx.fillStyle="#e5e7eb";ctx.font="12px system-ui";ctx.fillText(c.name,c.x-24,c.y-24);}
               for(var ti=0;ti<S.fleet.length;ti++){var t=S.fleet[ti];if(!t.route||t.route.length<2)continue;var d=t.at,x=null,y=null;for(var i2=0;i2<t.route.length-1;i2++){var A=C(t.route[i2]),B=C(t.route[i2+1]),L=Math.hypot(A.x-B.x,A.y-B.y);if(d<=L||i2===t.route.length-2){var kf=d/L,P=t.dir>0?{a:A,b:B}:{a:B,b:A};x=P.a.x+(P.b.x-P.a.x)*Math.min(1,Math.max(0,kf));y=P.a.y+(P.b.y-P.a.y)*Math.min(1,Math.max(0,kf));break;}else d-=L;}ctx.fillStyle=t.cargo==='wood'?'#8b5a2b':t.cargo==='grain'?'#e3b341':t.cargo==='steel'?'#6b7280':t.cargo==='goods'?'#60a5fa':'#c084fc';ctx.fillRect(x-6,y-4,12,8);}
-              // Ensure at least one pixel drawn (used by CI)
               try{ window.__frameSample = (ctx.getImageData(10,10,1,1).data||[])[3] || 0; }catch(e){}
               mctx.fillStyle="#0b0f16";mctx.fillRect(0,0,mini.width,mini.height);var sx=mini.width/view.width,sy=mini.height/view.height;for(var e2 of S.roads.entries()){var k2=e2[0],v2=e2[1],xy2=k2.split('-'),A2=C(xy2[0]),B2=C(xy2[1]);mctx.strokeStyle=['#2b3b55','#4e86ff','#75c46b','#ffd166'][v2.lvl];mctx.beginPath();mctx.moveTo(A2.x*sx,A2.y*sy);mctx.lineTo(B2.x*sx,B2.y*sy);mctx.stroke();}for(var i3=0;i3<CITIES.length;i3++){var cc=CITIES[i3];mctx.fillStyle="#9aa4b2";mctx.fillRect(cc.x*sx-2,cc.y*sy-2,4,4);}
               money.textContent=Math.round(S.$).toLocaleString()+" $";fuelEl.textContent=Math.floor(S.fuel)+"u";maintEl.textContent="-"+Math.round(S.maint)+" $/jour";day.textContent="Day "+S.day;}
@@ -289,7 +279,6 @@ jobs:
             (function loop(){tick();draw();requestAnimationFrame(loop);})();
           """), encoding="utf-8")
 
-          # Diagnostics page (/diag)
           diag = site/"diag"; diag.mkdir(exist_ok=True, parents=True)
           (diag/"index.html").write_text(textwrap.dedent("""\
             <!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -317,7 +306,7 @@ jobs:
               if('caches' in window){const keys=await caches.keys(); li('Caches: '+(keys.length?keys.join(', '):'aucun'), keys.length?'ok':'warn');}
               var standalone = window.navigator.standalone===true||(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches);
               li('Mode: '+(standalone?'App (standalone)':'Web (Safari/Chrome)'), standalone?'ok':'warn');
-              for(const f of ['../index.html','../style.css','../app.js','../sw.js']){try{const r=await fetch(f,{cache:'no-store'}); li('Fichier '+f+': '+(r.ok?'OK':'KO '+r.status), r.ok?'ok':'bad');}catch(e){li('Fichier '+f+': KO '+e,'bad');}}
+              for(const f of ['../index.html','../style.css','../app.js','../sw.js']){try{const r=await fetch(f,{cache:'no-store'}); li('Fichier '+f: '+(r.ok?'OK':'KO '+r.status), r.ok?'ok':'bad');}catch(e){li('Fichier '+f+': KO '+e,'bad');}}
             })();
           """), encoding="utf-8")
           PY
@@ -338,7 +327,8 @@ jobs:
           for f in ["_site/index.html","_site/style.css","_site/app.js","_site/sw.js","_site/diag/index.html"]:
             if not os.path.exists(f): print("Missing file:",f); ok=False
           if not ok: sys.exit(1)
-          print("Self-Test passed")
+          echo = print
+          echo("Self-Test passed")
           PY
 
       # ------------------ TESTS E2E (Playwright) ------------------
@@ -347,19 +337,18 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Install Playwright package
+        run: npm i --no-save playwright@1.46.0
+
       - name: Install Playwright Chromium
-        run: |
-          npm --version
-          npx --yes playwright@1.46.0 install --with-deps chromium
+        run: npx playwright install --with-deps chromium
 
       - name: Run smoke test (headless)
         run: |
-          # 1) start a static server on 4173
           python3 -m http.server 4173 --directory _site >/dev/null 2>&1 &
           echo $! > /tmp/srv.pid
           sleep 1
 
-          # 2) write test script
           cat > /tmp/smoke.mjs <<'JS'
           import { chromium } from 'playwright';
           const URL = 'http://localhost:4173/';
@@ -368,7 +357,7 @@ jobs:
           const logs = [];
           let ok = true;
 
-          function line(s){ return s.replace(/\n/g,' ').slice(0,500); }
+          function line(s){ return String(s).replace(/\n/g,' ').slice(0,500); }
 
           const browser = await chromium.launch();
           const page = await browser.newPage();
@@ -388,46 +377,31 @@ jobs:
           });
 
           await page.goto(URL, { waitUntil: 'load', timeout: 30000 });
-
-          // Wait UI anchors
           await page.waitForSelector('#view', { timeout: 10000 });
           await page.waitForSelector('#money', { timeout: 10000 });
-
-          // Give the draw loop a few frames
           await page.waitForTimeout(1200);
 
-          // Check canvas actually drew pixels (app.js sets window.__frameSample)
           const frameSample = await page.evaluate(() => window.__frameSample || 0);
-          if (!frameSample) {
-            errors.push('[assert] Canvas did not draw (alpha=0 at probe)');
-          }
+          if (!frameSample) errors.push('[assert] Canvas did not draw (alpha=0 at probe)');
 
-          // Switch tab to ensure no JS crash
           await page.getByRole('button', { name: 'Flotte' }).click().catch(()=>{});
           await page.getByRole('button', { name: 'Contrats' }).click().catch(()=>{});
           await page.getByRole('button', { name: 'Économie' }).click().catch(()=>{});
 
-          // Assert no console errors
-          if (errors.length) ok = false;
-
-          // Write logs
           const fs = await import('fs');
           fs.writeFileSync('playwright.log', logs.join('\n') + '\n', 'utf8');
 
           await browser.close();
 
-          if (!ok) {
-            console.error('SMOKE TEST FAILED\n' + errors.join('\n'));
+          if (errors.length) {
+            console.error('SMOKE TEST FAILED\\n' + errors.join('\\n'));
             process.exit(1);
           } else {
             console.log('SMOKE TEST PASSED');
           }
           JS
 
-          # 3) run test
           node /tmp/smoke.mjs || (echo "Playwright failed"; kill $(cat /tmp/srv.pid) 2>/dev/null; exit 1)
-
-          # 4) stop server
           kill $(cat /tmp/srv.pid) 2>/dev/null || true
 
       - name: Upload logs (always)
@@ -435,8 +409,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tktycoon-logs
-          path: |
-            playwright.log
+          path: playwright.log
 
       - name: Summarize test result
         if: always()
