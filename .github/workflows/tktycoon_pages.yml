@@ -1,4 +1,4 @@
-name: TK Tycoon Freight — Deluxe PWA
+name: TK Tycoon Freight — Deluxe PWA (iOS compat)
 
 on:
   push:
@@ -20,13 +20,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Generate deluxe PWA game
+      - name: Generate PWA (iOS-safe JS)
         run: |
           python3 - <<'PY'
           import json, pathlib, textwrap
           site = pathlib.Path("_site"); site.mkdir(parents=True, exist_ok=True)
 
-          # ---------- manifest + service worker ----------
+          # Manifest
           (site/"manifest.webmanifest").write_text(json.dumps({
             "name":"TK Tycoon Freight Deluxe",
             "short_name":"TK Tycoon",
@@ -37,19 +37,30 @@ jobs:
             "icons":[]
           }, indent=2), encoding="utf-8")
 
+          # Service Worker (cache simple)
           (site/"sw.js").write_text(textwrap.dedent("""\
-            const CACHE='tktycoon-deluxe-v1';
-            const ASSETS=['./','./index.html','./style.css','./app.js','./manifest.webmanifest'];
-            self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)))});
-            self.addEventListener('activate',e=>{e.waitUntil(self.clients.claim())});
-            self.addEventListener('fetch',e=>{
-              e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).then(res=>{
-                const cp=res.clone(); caches.open(CACHE).then(c=>c.put(e.request,cp)); return res;
-              })));
+            var CACHE='tktycoon-deluxe-v2';
+            var ASSETS=['./','./index.html','./style.css','./app.js','./manifest.webmanifest'];
+            self.addEventListener('install',function(e){
+              e.waitUntil(caches.open(CACHE).then(function(c){return c.addAll(ASSETS)}));
+            });
+            self.addEventListener('activate',function(e){
+              e.waitUntil(caches.keys().then(function(keys){
+                return Promise.all(keys.filter(function(k){return k!==CACHE}).map(function(k){return caches.delete(k)}));
+              }));
+            });
+            self.addEventListener('fetch',function(e){
+              e.respondWith(
+                caches.match(e.request,{ignoreSearch:true}).then(function(r){
+                  return r || fetch(e.request).then(function(res){
+                    var cp=res.clone(); caches.open(CACHE).then(function(c){c.put(e.request,cp)}); return res;
+                  }).catch(function(){ return r; });
+                })
+              );
             });
           """), encoding="utf-8")
 
-          # ---------- index.html ----------
+          # Index
           (site/"index.html").write_text(textwrap.dedent("""\
             <!doctype html>
             <meta charset="utf-8">
@@ -74,7 +85,6 @@ jobs:
                   <button data-tab="contracts">Contrats</button>
                   <button data-tab="economy">Économie</button>
                 </div>
-
                 <div class="tab" id="tab-build">
                   <h3>Réseau routier</h3>
                   <div class="row"><label>Ville A</label><select id="cityA"></select></div>
@@ -87,9 +97,7 @@ jobs:
                     </select>
                   </div>
                   <button id="buildRoad">Construire / Améliorer</button>
-                  <p class="hint">Astuce : améliore un axe principal, la vitesse impacte les revenus.</p>
                 </div>
-
                 <div class="tab hidden" id="tab-fleet">
                   <h3>Nouvel achat</h3>
                   <div class="row"><label>Type</label>
@@ -114,36 +122,32 @@ jobs:
                   <button id="buyTruck">Acheter & assigner</button>
                   <div id="fleetList" class="list"></div>
                 </div>
-
                 <div class="tab hidden" id="tab-contracts">
                   <h3>Contrats de fret</h3>
                   <div id="contracts" class="list"></div>
                 </div>
-
                 <div class="tab hidden" id="tab-economy">
                   <h3>Économie</h3>
                   <div id="eco" class="list"></div>
-                  <p class="hint">Les prix varient chaque “jour”. Des coûts d’entretien et de carburant sont déduits.</p>
                 </div>
               </div>
-
               <div class="right">
                 <canvas id="view" width="1300" height="740" aria-label="map"></canvas>
                 <canvas id="mini" width="220" height="140" class="mini"></canvas>
               </div>
             </div>
             <script src="./app.js"></script>
-            <script> if('serviceWorker' in navigator){ navigator.serviceWorker.register('./sw.js'); } </script>
+            <script>
+              if('serviceWorker' in navigator){ navigator.serviceWorker.register('./sw.js'); }
+            </script>
           """), encoding="utf-8")
 
-          # ---------- style.css ----------
+          # Style
           (site/"style.css").write_text(textwrap.dedent("""\
             :root{--bg:#0f1115;--panel:#141820;--line:#2a2f3a;--txt:#e6e6e6;--acc:#75c46b}
             *{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.4 system-ui,Segoe UI,Roboto}
-            .topbar{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);background:#0b0e13;position:sticky;top:0;z-index:10}
-            .brand{font-weight:800;letter-spacing:.2px}
+            .topbar{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);background:#0b0e13}
             .wrap{max-width:1500px;margin:12px auto;display:grid;grid-template-columns:360px 1fr;gap:12px;padding:0 12px}
-            .left{display:flex;flex-direction:column;gap:12px}
             .tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
             .tabs button{padding:.6rem;border-radius:10px;border:1px solid var(--line);background:#10151f;color:var(--txt);cursor:pointer;font-weight:600}
             .tabs button.active{background:var(--panel);outline:2px solid var(--acc);border-color:transparent}
@@ -151,72 +155,224 @@ jobs:
             .hidden{display:none}
             .row{display:grid;grid-template-columns:1fr;gap:6px;margin:.35rem 0}
             select,button{padding:.55rem;border-radius:10px;border:1px solid var(--line);background:#10151f;color:var(--txt)}
-            button{cursor:pointer;font-weight:700}
-            .list .item{border:1px solid var(--line);border-radius:10px;padding:8px;margin:6px 0}
-            .badge{display:inline-block;padding:2px 6px;border-radius:999px;background:#1f2835;border:1px solid var(--line);font-size:12px;margin-left:6px}
             #view{width:100%;border:1px solid var(--line);border-radius:12px;background:#0b0f16}
             .mini{position:absolute;right:18px;bottom:18px;border:1px solid var(--line);border-radius:8px;background:#0b0f16;opacity:.9}
             @media (max-width:1024px){.wrap{grid-template-columns:1fr}.right{order:-1}}
           """), encoding="utf-8")
 
-          # ---------- app.js (gameplay complet) ----------
+          # App.js — ES5 compatible (pas d'optional chaining)
           (site/"app.js").write_text(textwrap.dedent(r"""\
-            // === Helpers
-            function mulberry32(a){return function(){var t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return ((t^t>>>14)>>>0)/4294967296}}
-            function hashCode(str){let h=0; for(let i=0;i<str.length;i++){h=((h<<5)-h)+str.charCodeAt(i)|0;} return h>>>0;}
-            const RNG = mulberry32(hashCode(location.pathname));
+            // ---- Helpers (compat ES5)
+            function hashCode(s){var t=0;for(var i=0;i<s.length;i++){t=((t<<5)-t)+s.charCodeAt(i)|0}return t>>>0;}
+            function rngFactory(a){return function(){a+=0x6D2B79F5;var t=Math.imul(a^a>>>15,a|1);t^=t+Math.imul(t^t>>>7,t|61);return ((t^t>>>14)>>>0)/4294967296}}
+            var RNG = rngFactory(hashCode(location.pathname));
 
-            // === Data
-            const CITIES=[{id:'A',name:'Port-Est',x:120,y:520,pop:42},{id:'B',name:'Valbois',x:360,y:220,pop:28},{id:'C',name:'Fer-sur-Lac',x:760,y:180,pop:33},{id:'D',name:'Grainville',x:1040,y:520,pop:36},{id:'E',name:'Cap-Sud',x:560,y:560,pop:30},{id:'F',name:'Nordacier',x:1020,y:120,pop:26}];
-            const CARGO=['wood','grain','steel','goods','fuel'];
-            const TRUCK_TYPES={van:{label:'Fourgon',cap:6,speed:60,fuel:2,cost:4000,maint:20},rigid:{label:'Porteur',cap:16,speed:75,fuel:6,cost:9000,maint:45},semi:{label:'Semi',cap:32,speed:85,fuel:12,cost:18000,maint:80},tanker:{label:'Citerne',cap:28,speed:80,fuel:10,cost:22000,maint:95}};
-            let PRICES={wood:40,grain:35,steel:80,goods:100,fuel:70};
-            const INDUSTRY={A:{wood:+0.20,grain:0,steel:+0.05,goods:0,fuel:+0.10},B:{wood:+0.45,grain:+0.12,steel:0,goods:0,fuel:0},C:{wood:0,grain:0,steel:+0.35,goods:+0.02,fuel:+0.02},D:{wood:0,grain:+0.55,steel:0,goods:+0.05,fuel:+0.03},E:{wood:+0.12,grain:+0.12,steel:+0.08,goods:+0.04,fuel:+0.02},F:{wood:+0.02,grain:0,steel:+0.45,goods:0,fuel:+0.02},cons:{A:{goods:-0.3},B:{steel:-0.25},C:{goods:-0.2},D:{wood:-0.25},E:{grain:-0.2},F:{goods:-0.1}}};
-            function spawnContracts(){const arr=[],ids=['A','B','C','D','E','F'],all=['wood','grain','steel','goods','fuel'];for(let i=0;i<6;i++){const cargo=all[(Math.random()+RNG())*all.length|0];let to=ids[(Math.random()+RNG())*ids.length|0];arr.push({id:i+1,cargo,to,reward:Math.round(180+RNG()*260),demand:Math.round(12+RNG()*26)});}return arr;}
-            let CONTRACTS=spawnContracts();
+            // ---- Data
+            var CITIES=[{id:'A',name:'Port-Est',x:120,y:520},{id:'B',name:'Valbois',x:360,y:220},{id:'C',name:'Fer-sur-Lac',x:760,y:180},{id:'D',name:'Grainville',x:1040,y:520},{id:'E',name:'Cap-Sud',x:560,y:560},{id:'F',name:'Nordacier',x:1020,y:120}];
+            var CARGO=['wood','grain','steel','goods','fuel'];
+            var TRUCKS={van:{cap:6,spd:60,f:2,c:4000,m:20,l:'Fourgon'},rigid:{cap:16,spd:75,f:6,c:9000,m:45,l:'Porteur'},semi:{cap:32,spd:85,f:12,c:18000,m:80,l:'Semi'},tanker:{cap:28,spd:80,f:10,c:22000,m:95,l:'Citerne'}};
+            var PRICE={wood:40,grain:35,steel:80,goods:100,fuel:70};
+            var IND={A:{wood:.20,steel:.05,fuel:.10},B:{wood:.45,grain:.12},C:{steel:.35,goods:.02,fuel:.02},D:{grain:.55,goods:.05,fuel:.03},E:{wood:.12,grain:.12,steel:.08,goods:.04,fuel:.02},F:{steel:.45,fuel:.02},cons:{A:{goods:-.30},B:{steel:-.25},C:{goods:-.2},D:{wood:-.25},E:{grain:-.2},F:{goods:-.1}}};
 
-            // === State
-            const state={t:0,dt:0.25,day:1,money:25000,fuelStock:0,maintCost:0,roads:new Map(),stocks:Object.fromEntries(CITIES.map(c=>[c.id,Object.fromEntries(CARGO.map(k=>[k,0]))])),trucks:[],saveKey:'tktycoon-deluxe-v1'};
-            let truckSeq=1;
+            function newContracts(){
+              var arr=[], ids=['A','B','C','D','E','F'], all=CARGO;
+              for(var i=0;i<6;i++){
+                var cargo=all[(Math.random()+RNG())*all.length|0];
+                var to=ids[(Math.random()+RNG())*ids.length|0];
+                arr.push({id:i+1,cargo:cargo,to:to,reward:Math.round(180+RNG()*260),demand:Math.round(12+RNG()*26)});
+              } return arr;
+            }
 
-            // === UI
-            const canvas=document.getElementById('view'),ctx=canvas.getContext('2d');
-            const mini=document.getElementById('mini'),mctx=mini.getContext('2d');
-            const moneyEl=document.getElementById('money'),dayEl=document.getElementById('day'),fuelEl=document.getElementById('fuel'),maintEl=document.getElementById('maint');
-            const cityA=document.getElementById('cityA'),cityB=document.getElementById('cityB'),fromSel=document.getElementById('from'),toSel=document.getElementById('to');
-            for(const s of [cityA,cityB,fromSel,toSel]){CITIES.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.name;s.appendChild(o);});}
-            document.getElementById('buildRoad').onclick=()=>{const lvl=parseInt(document.getElementById('roadLvl').value,10);if(!buildOrUpgrade(cityA.value,cityB.value,lvl))alert("Impossible (fonds ou sélection).");};
-            document.getElementById('buyTruck').onclick=()=>{const type=document.getElementById('truckType').value;const cargo=document.getElementById('cargoType').value;const r=buyTruck(type,fromSel.value,toSel.value,cargo);if(!r.ok)alert(r.msg);renderFleet();};
-            document.querySelectorAll('.tabs button').forEach(b=>{b.onclick=()=>{document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.tab').forEach(t=>t.classList.add('hidden'));document.getElementById('tab-'+b.dataset.tab).classList.remove('hidden');};});
+            // ---- State
+            var S={t:0,dt:.25,day:1,$:25000,fuel:0,maint:0,roads:new Map(),stocks:{},fleet:[],contracts:newContracts()};
+            for(var ci=0;ci<CITIES.length;ci++){
+              var id=CITIES[ci].id; S.stocks[id]={}; for(var k=0;k<CARGO.length;k++){S.stocks[id][CARGO[k]]=0;}
+            }
+            var seq=1;
 
-            // === Graph utils
-            const key=(a,b)=>a<b?`${a}-${b}`:`${b}-${a}`; const city=id=>CITIES.find(c=>c.id===id);
-            const dist=(a,b)=>{const A=city(a),B=city(b);return Math.hypot(A.x-B.x,A.y-B.y);};
-            function buildOrUpgrade(a,b,lvl){if(a===b)return false;const k=key(a,b);const cur=state.roads.get(k)?.lvl||0;if(lvl<=cur)return true;const cost=[0,1000,2500,6000][lvl]-[0,1000,2500,6000][cur];if(state.money<cost)return false;state.money-=cost;state.roads.set(k,{lvl});return true;}
-            function neighbors(id){const n=[];for(const [k,v] of state.roads){const [x,y]=k.split('-');if(x===id)n.push(y);else if(y===id)n.push(x);}return n;}
-            function speedOn(a,b){const lvl=state.roads.get(key(a,b))?.lvl||0;return [0,1,1.35,1.75][lvl]||0.5;}
-            function astar(a,b){if(a===b)return[a];const open=[a],came={},g={},f={};for(const c of CITIES){g[c.id]=1e9;f[c.id]=1e9;}g[a]=0;f[a]=dist(a,b)/80;while(open.length){open.sort((i,j)=>f[i]-f[j]);const cur=open.shift();if(cur===b)return reconstruct(came,b);for(const nb of neighbors(cur)){const d=dist(cur,nb)/speedOn(cur,nb),gg=g[cur]+d;if(gg<g[nb]){came[nb]=cur;g[nb]=gg;f[nb]=gg+dist(nb,b)/80;if(!open.includes(nb))open.push(nb);}}}return null;}
-            function reconstruct(c,b){const p=[b];while(c[b]){b=c[b];p.unshift(b);}return p;}
-            const pathLen=p=>p? p.slice(1).reduce((s,_,i)=>s+dist(p[i],p[i+1]),0):0;
+            // ---- UI refs
+            function $(id){return document.getElementById(id)}
+            var view=$('view'),ctx=view.getContext('2d'),mini=$('mini'),mctx=mini.getContext('2d');
+            var money=$('money'),day=$('day'),fuelEl=$('fuel'),maintEl=$('maint');
+            var cityA=$('cityA'),cityB=$('cityB'),from=$('from'),to=$('to');
 
-            // === Gameplay
-            function buyTruck(type,from,to,cargo){const def=TRUCK_TYPES[type];if(!def)return{ok:false,msg:'Type inconnu'};const p=astar(from,to);if(!p)return{ok:false,msg:'Pas de route'};if(state.money<def.cost)return{ok:false,msg:'Fonds insuffisants'};state.money-=def.cost;state.trucks.push({id:truckSeq++,type,cap:def.cap,cargo,from,to,route:p,dist:pathLen(p),at:0,dir:+1,load:0,speed:def.speed/100,fuel:def.fuel,maint:def.maint});return{ok:true};}
-            function dynamicEconomy(){for(const k in PRICES){PRICES[k]=Math.max(10,PRICES[k]+Math.round((Math.random()+RNG()-0.5)*6));}const roadMaint=[...state.roads.values()].reduce((a,r)=>a+r.lvl*10,0);const fleetMaint=state.trucks.reduce((a,t)=>a+t.maint,0);state.maintCost=roadMaint+fleetMaint;state.money-=state.maintCost;const fuelIncome=Math.min(state.fuelStock,20)*PRICES.fuel;state.money+=fuelIncome;state.fuelStock=Math.max(0,state.fuelStock-20);}
-            function tick(){state.t+=state.dt;const newDay=Math.floor(state.t/40)+1;if(newDay!==state.day){state.day=newDay;dynamicEconomy();CONTRACTS=spawnContracts();}for(const c of CITIES){for(const k of CARGO){state.stocks[c.id][k]+=Math.max(0,(INDUSTRY[c.id][k]||0))*state.dt;state.stocks[c.id][k]+=Math.min(0,(INDUSTRY.cons[c.id]?.[k]||0))*state.dt;if(state.stocks[c.id][k]<0)state.stocks[c.id][k]=0;}}for(const t of state.trucks){if(!t.route||t.dist<=0)continue;const avg=avgSpeedFactor(t.route);t.at+=80*t.speed*avg*state.dt;if(t.at>=t.dist){const dest=t.dir>0?t.route[t.route.length-1]:t.route[0];if(t.load>0&&dest===t.to){const ct=CONTRACTS.find(c=>c.cargo===t.cargo&&c.to===dest&&c.demand>0);let delivered=t.load;if(ct){const used=Math.min(ct.demand,delivered);state.money+=used*(ct.reward+(PRICES[t.cargo]||0));ct.demand-=used;delivered-=used;}else{state.money+=delivered*(PRICES[t.cargo]||0);}if(t.cargo==='fuel')state.fuelStock+=delivered;state.stocks[dest][t.cargo]+=Math.max(0,delivered);t.load=0;}if(t.dir<0){const avail=state.stocks[t.from][t.cargo]||0,take=Math.min(avail,t.cap);state.stocks[t.from][t.cargo]-=take;t.load=take;state.money-=(t.dist/20)*t.fuel;}t.dir*=-1;t.at=0;}}}
-            function avgSpeedFactor(route){if(!route||route.length<2)return 1;let s=0,c=0;for(let i=0;i<route.length-1;i++){s+=speedOn(route[i],route[i+1]);c++;}return c?s/c:1;}
+            function fillSelect(sel){
+              for(var i=0;i<CITIES.length;i++){var c=CITIES[i];var o=document.createElement('option');o.value=c.id;o.textContent=c.name;sel.appendChild(o);}
+            }
+            fillSelect(cityA); fillSelect(cityB); fillSelect(from); fillSelect(to);
 
-            // === Rendering
-            function draw(){ctx.fillStyle="#0b0f16";ctx.fillRect(0,0,canvas.width,canvas.height);for(const [k,v] of state.roads){const [a,b]=k.split('-');const A=city(a),B=city(b);ctx.lineWidth=2+v.lvl*1.5;ctx.strokeStyle=['#2b3b55','#4e86ff','#75c46b','#ffd166'][v.lvl];ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke();}for(const c of CITIES){ctx.fillStyle="#1f2937";ctx.beginPath();ctx.arc(c.x,c.y,18,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#4b5563";ctx.stroke();ctx.fillStyle="#e5e7eb";ctx.font="12px system-ui";ctx.fillText(c.name,c.x-24,c.y-24);}for(const t of state.trucks){if(!t.route||t.route.length<2)continue;let d=t.at,x=null,y=null;for(let i=0;i<t.route.length-1;i++){const A=city(t.route[i]),B=city(t.route[i+1]);const L=Math.hypot(A.x-B.x,A.y-B.y);if(d<=L||i===t.route.length-2){const k=d/L;const P=t.dir>0?{a:A,b:B}:{a:B,b:A};x=P.a.x+(P.b.x-P.a.x)*Math.min(1,Math.max(0,k));y=P.a.y+(P.b.y-P.a.y)*Math.min(1,Math.max(0,k));break;}else d-=L;}ctx.fillStyle=t.cargo==='wood'?'#8b5a2b':t.cargo==='grain'?'#e3b341':t.cargo==='steel'?'#6b7280':t.cargo==='goods'?'#60a5fa':'#c084fc';ctx.fillRect(x-6,y-4,12,8);}mctx.fillStyle="#0b0f16";mctx.fillRect(0,0,mini.width,mini.height);const sx=mini.width/canvas.width,sy=mini.height/canvas.height;for(const [k,v] of state.roads){const [a,b]=k.split('-');const A=city(a),B=city(b);mctx.strokeStyle=['#2b3b55','#4e86ff','#75c46b','#ffd166'][v.lvl];mctx.beginPath();mctx.moveTo(A.x*sx,A.y*sy);mctx.lineTo(B.x*sx,B.y*sy);mctx.stroke();}for(const c of CITIES){mctx.fillStyle="#9aa4b2";mctx.fillRect(c.x*sx-2,c.y*sy-2,4,4);}moneyEl.textContent=Math.round(state.money).toLocaleString()+" $";fuelEl.textContent=Math.floor(state.fuelStock)+"u";maintEl.textContent="-"+Math.round(state.maintCost)+" $/jour";dayEl.textContent="Day "+state.day;}
+            // ---- Graph utils (sans optional chaining)
+            function key(a,b){return a<b?a+'-'+b:b+'-'+a}
+            function C(id){for(var i=0;i<CITIES.length;i++)if(CITIES[i].id===id)return CITIES[i]}
+            function dist(a,b){var A=C(a),B=C(b);return Math.hypot(A.x-B.x,A.y-B.y)}
+            function roadLvl(a,b){var v=S.roads.get(key(a,b)); return v?v.lvl:0}
+            function speed(a,b){var lvl=roadLvl(a,b); return [0,1,1.35,1.75][lvl]||.5}
+            function neighbors(id){
+              var n=[], it=S.roads.entries(); for(var e of it){var k=e[0]; var xy=k.split('-'); if(xy[0]===id)n.push(xy[1]); else if(xy[1]===id)n.push(xy[0]);}
+              return n;
+            }
+            function upgrade(a,b,lvl){
+              if(a===b)return false; var k=key(a,b); var v=S.roads.get(k); var cur=v?v.lvl:0;
+              if(lvl<=cur)return true;
+              var steps=[0,1000,2500,6000], cost=steps[lvl]-steps[cur];
+              if(S.$<cost)return false; S.$-=cost; S.roads.set(k,{lvl:lvl}); return true;
+            }
+            function astar(a,b){
+              if(a===b)return[a];
+              var open=[a],came={},g={},f={};
+              for(var i=0;i<CITIES.length;i++){var id=CITIES[i].id;g[id]=1e9;f[id]=1e9}
+              g[a]=0; f[a]=dist(a,b)/80;
+              while(open.length){
+                open.sort(function(i,j){return f[i]-f[j]}); var u=open.shift(); if(u===b)break;
+                var nb=neighbors(u);
+                for(var j=0;j<nb.length;j++){
+                  var v=nb[j]; var gg=g[u]+dist(u,v)/speed(u,v);
+                  if(gg<g[v]){came[v]=u; g[v]=gg; f[v]=gg+dist(v,b)/80; if(open.indexOf(v)<0)open.push(v);}
+                }
+              }
+              if(!came[b])return null; var p=[b]; while(came[p[0]])p.unshift(came[p[0]]); return p;
+            }
+            function pathLen(p){ if(!p)return 0; var s=0; for(var i=0;i<p.length-1;i++) s+=dist(p[i],p[i+1]); return s; }
+            function avgSpeed(r){ if(!r||r.length<2)return 1; var s=0,c=0; for(var i=0;i<r.length-1;i++){s+=speed(r[i],r[i+1]);c++;} return c?s/c:1; }
 
-            // === Lists
-            function renderFleet(){const box=document.getElementById('fleetList');box.innerHTML='';for(const t of state.trucks){const it=document.createElement('div');it.className='item';it.innerHTML=`#${t.id} ${TRUCK_TYPES[t.type].label} • ${t.cargo} • ${city(t.from).name} ⇆ ${city(t.to).name}<span class="badge">cap ${t.cap}</span><span class="badge">v${TRUCK_TYPES[t.type].speed}km/h</span><span class="badge">fuel ${t.fuel}/100km</span>`;box.appendChild(it);}}
-            function renderContracts(){const box=document.getElementById('contracts');box.innerHTML='';for(const c of CONTRACTS){const it=document.createElement('div');it.className='item';it.innerHTML=`<b>${c.cargo}</b> → ${city(c.to).name}<span class="badge">${c.reward}$/u</span><span class="badge">reste ${c.demand}</span>`;box.appendChild(it);}}
-            function renderEconomy(){const box=document.getElementById('eco');box.innerHTML='';for(const k in PRICES){const it=document.createElement('div');it.className='item';it.innerHTML=`${k} <span class="badge">${PRICES[k]}$/u</span>`;box.appendChild(it);}}
-            setInterval(()=>{renderFleet();renderContracts();renderEconomy();},1000);
+            // ---- Actions
+            $('buildRoad').onclick=function(){ var lvl=parseInt($('roadLvl').value,10); if(!upgrade(cityA.value,cityB.value,lvl)) alert("Impossible (fonds ou sélection)."); };
+            $('buyTruck').onclick=function(){
+              var type=$('truckType').value, cargo=$('cargoType').value;
+              var p=astar(from.value,to.value); if(!p) return alert("Pas de route");
+              var d=TRUCKS[type]; if(S.$<d.c) return alert("Fonds insuffisants");
+              S.$-=d.c; S.fleet.push({id:seq++,type:type,cargo:cargo,from:from.value,to:to.value,route:p,dist:pathLen(p),at:0,dir:1,load:0,spd:d.spd/100,f:d.f,m:d.m});
+              renderFleet();
+            };
 
-            // === Boot
-            buildOrUpgrade('A','E',2);buildOrUpgrade('E','B',1);buildOrUpgrade('E','C',1);buildOrUpgrade('E','D',1);buildOrUpgrade('C','F',1);
-            function loop(){tick();draw();requestAnimationFrame(loop);} loop();
+            // ---- Economy
+            function econDay(){
+              for(var k in PRICE){ PRICE[k]=Math.max(10, PRICE[k]+Math.round((Math.random()+RNG()-.5)*6)); }
+              var roadM=0; for(var e of S.roads.values()){roadM+=e.lvl*10}
+              var fleetM=0; for(var i=0;i<S.fleet.length;i++){fleetM+=S.fleet[i].m}
+              S.maint=roadM+fleetM; S.$-=S.maint;
+              var fuelInc=Math.min(S.fuel,20)*PRICE.fuel; S.$+=fuelInc; S.fuel=Math.max(0,S.fuel-20);
+            }
+
+            // ---- Tick
+            function tick(){
+              S.t+=S.dt; var d=Math.floor(S.t/40)+1; if(d!==S.day){S.day=d; econDay(); S.contracts=newContracts();}
+              // industries
+              for(var ci=0;ci<CITIES.length;ci++){
+                var id=CITIES[ci].id;
+                for(var k=0;k<CARGO.length;k++){
+                  var cg=CARGO[k];
+                  var prod=(IND[id]&&IND[id][cg])?IND[id][cg]:0;
+                  var cons=(IND.cons[id]&&IND.cons[id][cg])?IND.cons[id][cg]:0;
+                  S.stocks[id][cg]+= (prod>0?prod:0)*S.dt;
+                  S.stocks[id][cg]+= (cons<0?cons:0)*S.dt;
+                  if(S.stocks[id][cg]<0)S.stocks[id][cg]=0;
+                }
+              }
+              // trucks
+              for(var ti=0;ti<S.fleet.length;ti++){
+                var t=S.fleet[ti]; if(!t.route||t.dist<=0)continue;
+                t.at+=80*t.spd*avgSpeed(t.route)*S.dt;
+                if(t.at>=t.dist){
+                  var dst=t.dir>0?t.route[t.route.length-1]:t.route[0];
+                  if(t.load>0 && dst===t.to){
+                    var i,ct=null;
+                    for(i=0;i<S.contracts.length;i++){var c=S.contracts[i]; if(c.cargo===t.cargo && c.to===dst && c.demand>0){ct=c;break}}
+                    var q=t.load;
+                    if(ct){var u=Math.min(ct.demand,q); S.$+=u*(ct.reward+(PRICE[t.cargo]||0)); ct.demand-=u; q-=u;}
+                    else { S.$+=q*(PRICE[t.cargo]||0); q=0; }
+                    if(t.cargo==='fuel') S.fuel+=t.load;
+                    S.stocks[dst][t.cargo]+= (q>0?q:0);
+                    t.load=0;
+                  }
+                  if(t.dir<0){
+                    var avail=S.stocks[t.from][t.cargo]||0, take=Math.min(avail,t.cap||TRUCKS[t.type].cap);
+                    S.stocks[t.from][t.cargo]-=take; t.load=take;
+                    S.$ -= (t.dist/20)*t.f;
+                  }
+                  t.dir*=-1; t.at=0;
+                }
+              }
+            }
+
+            // ---- Render
+            function draw(){
+              ctx.fillStyle="#0b0f16"; ctx.fillRect(0,0,view.width,view.height);
+              // roads
+              for(var e of S.roads.entries()){
+                var k=e[0], v=e[1]; var xy=k.split('-'); var A=C(xy[0]),B=C(xy[1]);
+                ctx.lineWidth=2+v.lvl*1.5; ctx.strokeStyle=['#2b3b55','#4e86ff','#75c46b','#ffd166'][v.lvl];
+                ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
+              }
+              // cities
+              for(var i=0;i<CITIES.length;i++){
+                var c=CITIES[i]; ctx.fillStyle="#1f2937"; ctx.beginPath(); ctx.arc(c.x,c.y,18,0,Math.PI*2); ctx.fill();
+                ctx.strokeStyle="#4b5563"; ctx.stroke(); ctx.fillStyle="#e5e7eb"; ctx.font="12px system-ui"; ctx.fillText(c.name,c.x-24,c.y-24);
+              }
+              // trucks
+              for(var ti=0;ti<S.fleet.length;ti++){
+                var t=S.fleet[ti]; if(!t.route||t.route.length<2)continue;
+                var d=t.at,x=null,y=null;
+                for(var i2=0;i2<t.route.length-1;i2++){
+                  var A=C(t.route[i2]),B=C(t.route[i2+1]); var L=Math.hypot(A.x-B.x,A.y-B.y);
+                  if(d<=L||i2===t.route.length-2){
+                    var kf=d/L, P=t.dir>0?{a:A,b:B}:{a:B,b:A}; x=P.a.x+(P.b.x-P.a.x)*Math.min(1,Math.max(0,kf)); y=P.a.y+(P.b.y-P.a.y)*Math.min(1,Math.max(0,kf)); break;
+                  } else d-=L;
+                }
+                ctx.fillStyle=t.cargo==='wood'?'#8b5a2b':t.cargo==='grain'?'#e3b341':t.cargo==='steel'?'#6b7280':t.cargo==='goods'?'#60a5fa':'#c084fc';
+                ctx.fillRect(x-6,y-4,12,8);
+              }
+              // mini
+              mctx.fillStyle="#0b0f16"; mctx.fillRect(0,0,mini.width,mini.height);
+              var sx=mini.width/view.width, sy=mini.height/view.height;
+              for(var e2 of S.roads.entries()){
+                var k2=e2[0], v2=e2[1]; var xy2=k2.split('-'); var A2=C(xy2[0]),B2=C(xy2[1]);
+                mctx.strokeStyle=['#2b3b55','#4e86ff','#75c46b','#ffd166'][v2.lvl];
+                mctx.beginPath(); mctx.moveTo(A2.x*sx,A2.y*sy); mctx.lineTo(B2.x*sx,B2.y*sy); mctx.stroke();
+              }
+              for(var i3=0;i3<CITIES.length;i3++){var cc=CITIES[i3]; mctx.fillStyle="#9aa4b2"; mctx.fillRect(cc.x*sx-2,cc.y*sy-2,4,4);}
+
+              money.textContent=Math.round(S.$).toLocaleString()+" $";
+              fuelEl.textContent=Math.floor(S.fuel)+"u";
+              maintEl.textContent="-"+Math.round(S.maint)+" $/jour";
+              day.textContent="Day "+S.day;
+            }
+
+            // ---- Lists
+            function renderFleet(){
+              var box=document.getElementById('fleetList'); box.innerHTML='';
+              for(var i=0;i<S.fleet.length;i++){
+                var t=S.fleet[i], def=TRUCKS[t.type];
+                var it=document.createElement('div'); it.className='item';
+                it.innerHTML='#'+t.id+' '+def.l+' • '+t.cargo+' • '+C(t.from).name+' ⇆ '+C(t.to).name+
+                  '<span class="badge">cap '+(t.cap||def.cap)+'</span>'+
+                  '<span class="badge">v'+def.spd+'km/h</span>'+
+                  '<span class="badge">fuel '+t.f+'/100km</span>';
+                box.appendChild(it);
+              }
+            }
+            function renderContracts(){
+              var box=document.getElementById('contracts'); box.innerHTML='';
+              for(var i=0;i<S.contracts.length;i++){
+                var c=S.contracts[i], it=document.createElement('div'); it.className='item';
+                it.innerHTML='<b>'+c.cargo+'</b> → '+C(c.to).name+
+                  '<span class="badge">'+c.reward+'$/u</span>'+
+                  '<span class="badge">reste '+c.demand+'</span>';
+                box.appendChild(it);
+              }
+            }
+            function renderEconomy(){
+              var box=document.getElementById('eco'); box.innerHTML='';
+              for(var k in PRICE){
+                var it=document.createElement('div'); it.className='item';
+                it.innerHTML=k+' <span class="badge">'+PRICE[k]+'$/u</span>'; box.appendChild(it);
+              }
+            }
+            setInterval(function(){renderFleet();renderContracts();renderEconomy();},1000);
+
+            // ---- Boot: réseau initial + boucle
+            upgrade('A','E',2); upgrade('E','B',1); upgrade('E','C',1); upgrade('E','D',1); upgrade('C','F',1);
+            (function loop(){ tick(); draw(); requestAnimationFrame(loop); })();
           """), encoding="utf-8")
           PY
 
@@ -229,5 +385,17 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Show site URL
+        run: |
+          OWNER="${GITHUB_REPOSITORY%/*}"
+          REPO="${GITHUB_REPOSITORY#*/}"
+          URL="https://${OWNER}.github.io/${REPO}/"
+          echo "Game URL: ${URL}"
+          {
+            echo "## ✅ Your game is live"
+            echo ""
+            echo "**URL**: ${URL}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Deploy to GitHub Pages
         uses: actions/deploy-pages@v4
