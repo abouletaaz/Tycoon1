@@ -1,4 +1,4 @@
-name: TK Tycoon — Pages + PWA anti-cache (v9)
+name: TK Tycoon — reset propre (v10)
 
 on:
   push:
@@ -15,33 +15,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build_and_test:
+  build:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build site
+      - name: Génère le site (PWA + app robuste)
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json, pathlib, textwrap
-          V = "v9"   # <<< bump ici
-          site = pathlib.Path("_site"); site.mkdir(parents=True, exist_ok=True)
+          V="v10"  # bump cache et cache-busting
+          out = pathlib.Path("_site"); out.mkdir(parents=True, exist_ok=True)
 
-          # ---- fichiers existants gardés s'ils sont déjà dans le repo ----
-          # On réutilise ton index/style/app si présents, sinon on les crée minimes.
-          def write_if_absent(p, content):
-            p = pathlib.Path(p)
-            if not p.exists():
-              p.write_text(content, encoding="utf-8")
-
-          # manifest + icônes
-          (site/"manifest.webmanifest").write_text(json.dumps({
-            "name":"TK Tycoon Freight Deluxe","short_name":"TK Tycoon",
-            "start_url":"./","scope":"./","display":"standalone",
-            "background_color":"#0f1115","theme_color":"#0f1115",
+          # --- manifest + icônes minimalistes
+          (out/"manifest.webmanifest").write_text(json.dumps({
+            "name":"TK Tycoon Freight Deluxe",
+            "short_name":"TK Tycoon",
+            "start_url":"./",
+            "scope":"./",
+            "display":"standalone",
+            "background_color":"#0f1115",
+            "theme_color":"#0f1115",
             "icons":[
               {"src":"icon-192.png","sizes":"192x192","type":"image/png"},
               {"src":"icon-512.png","sizes":"512x512","type":"image/png"}
@@ -49,14 +45,14 @@ jobs:
           }, indent=2), encoding="utf-8")
           tiny = bytes.fromhex("89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C4890000000A49444154789C6360000002000154010A9B0000000049454E44AE426082")
           for f in ("icon-192.png","icon-512.png","apple-touch-icon.png"):
-            (site/f).write_bytes(tiny)
+            (out/f).write_bytes(tiny)
 
-          # service worker anti-cache
-          (site/"sw.js").write_text(textwrap.dedent(f"""
+          # --- service worker : anti-cache agressif (skipWaiting+claim) + cache-bust app.js?v=V
+          (out/"sw.js").write_text(textwrap.dedent(f"""
             const CACHE='tktycoon-{V}';
-            const ASSETS=['./','./index.html','./style.css','./app.js?{V}','./manifest.webmanifest','./apple-touch-icon.png','./diag/index.html','./diag/diag.js','./diag/diag.css'];
+            const ASSETS=['./','./index.html','./style.css','./app.js?{V}','./manifest.webmanifest','./apple-touch-icon.png'];
             self.addEventListener('install',e=>{{
-              self.skipWaiting();  // <-- prend la main immédiatement
+              self.skipWaiting();
               e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));
             }});
             self.addEventListener('activate',e=>{{
@@ -65,7 +61,6 @@ jobs:
               );
             }});
             self.addEventListener('fetch',e=>{{
-              // cache-first avec mise à jour en arrière-plan
               e.respondWith(
                 caches.match(e.request,{{ignoreSearch:true}}).then(r=>r||fetch(e.request).then(res=>{{
                   const cp=res.clone(); caches.open(CACHE).then(c=>c.put(e.request,cp)); return res;
@@ -74,17 +69,208 @@ jobs:
             }});
           """), encoding="utf-8")
 
-          # index minimal si absent (ajoute juste l’appel versionné à app.js)
-          write_if_absent(site/"index.html", f"""<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>TK Tycoon</title><link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" href="./apple-touch-icon.png"><link rel="stylesheet" href="./style.css"><div class=appbar><span class=pill>🚚 TK Tycoon</span><a class=pill href="./diag/">Diagnostic</a><button id=btnUpdate class=pill>Mettre à jour</button></div><div id=app></div><script src="./app.js?{V}"></script><script>if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js');const u=document.getElementById('btnUpdate');u.onclick=async()=>{{if('caches'in window){{for(const k of await caches.keys()){{await caches.delete(k)}}}}if('serviceWorker'in navigator){{for(const r of await navigator.serviceWorker.getRegistrations()){{await r.unregister()}}}}location.reload(true)}}</script>""")
+          # --- style compact
+          (out/"style.css").write_text(textwrap.dedent("""
+            :root{--bg:#0f1115;--panel:#141820;--line:#2a2f3a;--txt:#e6e6e6;--acc:#75c46b}
+            *{box-sizing:border-box} html,body{height:100%}
+            body{margin:0;background:var(--bg);color:var(--txt);font:14px system-ui,Segoe UI,Roboto}
+            .bar{position:sticky;top:0;z-index:10;display:flex;gap:8px;align-items:center;justify-content:space-between;background:#0b0e13;padding:8px 12px;border-bottom:1px solid var(--line)}
+            .pill{border:1px solid var(--line);background:#10151f;color:var(--txt);border-radius:999px;padding:6px 10px;font-weight:600}
+            .wrap{max-width:1200px;margin:12px auto;padding:0 12px;display:grid;grid-template-columns:380px 1fr;gap:12px}
+            @media(max-width:980px){.wrap{grid-template-columns:1fr}}
+            .tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
+            .tabs button{padding:.6rem;border-radius:10px;border:1px solid var(--line);background:#10151f;color:#e6e6e6;cursor:pointer;font-weight:600}
+            .tabs button.active{background:var(--panel);outline:2px solid var(--acc);border-color:transparent}
+            .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+            .row{display:grid;gap:6px;margin:.35rem 0}
+            select,button{padding:.55rem;border-radius:10px;border:1px solid var(--line);background:#10151f;color:#e6e6e6}
+            canvas{width:100%;border:1px solid var(--line);background:#0b0f16;border-radius:12px}
+            #err{position:fixed;left:8px;bottom:8px;right:8px;max-height:34vh;overflow:auto;background:#2b1e1e;border:1px solid #5a2c2c;color:#ffd6d6;padding:8px;border-radius:10px;font:12px ui-monospace,Menlo,monospace;display:none;white-space:pre-wrap}
+            #err.show{display:block}
+          """), encoding="utf-8")
 
-          # style minimal si absent
-          write_if_absent(site/"style.css", ":root{--bg:#0f1115;--line:#2a2f3a;--txt:#e6e6e6}.appbar{position:sticky;top:0;background:#0b0e13;color:var(--txt);border-bottom:1px solid var(--line);padding:8px;display:flex;gap:8px}.pill{border:1px solid var(--line);background:#10151f;color:var(--txt);border-radius:999px;padding:6px 10px;font-weight:600}body{margin:0;background:#0f1115;color:var(--txt);font:14px system-ui}")
+          # --- HTML : appelle app.js avec ?v=V, bouton "Mettre à jour" qui purge tout
+          (out/"index.html").write_text(textwrap.dedent(f"""
+            <!doctype html><html lang="fr"><head>
+              <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+              <title>TK Tycoon Freight Deluxe</title>
+              <meta name="theme-color" content="#0f1115">
+              <link rel="manifest" href="./manifest.webmanifest">
+              <meta name="apple-mobile-web-app-capable" content="yes">
+              <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+              <meta name="apple-mobile-web-app-title" content="TK Tycoon">
+              <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+              <link rel="stylesheet" href="./style.css">
+            </head><body>
+              <div class="bar">
+                <div>
+                  <span class="pill">🚚 TK Tycoon</span>
+                  <span id="mode" class="pill">Mode: web</span>
+                </div>
+                <div>
+                  <button id="btnInstall" class="pill" hidden>Installer</button>
+                  <button id="btnUpdate" class="pill">Mettre à jour</button>
+                </div>
+              </div>
 
-          # --- DIAG avec bouton Purger ---
-          diag = site/"diag"; diag.mkdir(parents=True, exist_ok=True)
-          (diag/"index.html").write_text("""<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Diagnostic PWA</title><link rel="stylesheet" href="./diag.css"><div class="card"><h2>Diagnostic PWA</h2><div id="out">Tests…</div><p><button id="purge" class="btn">🧹 Purger cache + SW</button> <a class="btn" href="../">← Retour au jeu</a></p></div><script src="./diag.js"></script>""", encoding="utf-8")
-          (diag/"diag.css").write_text("body{margin:0;background:#0f1115;color:#e6e6e6;font:14px system-ui;display:grid;place-items:center;min-height:100vh}.card{background:#141820;border:1px solid #2a2f3a;border-radius:12px;padding:16px;max-width:680px;width:94%}.ok{color:#75c46b}.bad{color:#ef5350}.warn{color:#ffb454}.btn{display:inline-block;padding:8px 10px;border:1px solid #2a2f3a;border-radius:8px;color:#e6e6e6;background:#10151f;text-decoration:none}ul{line-height:1.6}", encoding="utf-8")
-          (diag/"diag.js").write_text(f"(async function(){{function li(t,c){{var el=document.createElement('li');el.textContent=t;if(c)el.className=c;list.appendChild(el)}}var out=document.getElementById('out');var ul=document.createElement('ul');out.innerHTML='';out.appendChild(ul);var list=ul;li('HTTPS: '+(location.protocol==='https:'?'OK':'KO'), location.protocol==='https:'?'ok':'bad');try{{const r=await fetch('../manifest.webmanifest',{{cache:'no-store'}}); li('Manifest: '+(r.ok?'OK':'KO '+r.status), r.ok?'ok':'bad');}}catch(e){{li('Manifest: KO '+e,'bad');}}if('serviceWorker' in navigator){{try{{const reg=await navigator.serviceWorker.getRegistration('../'); li('Service worker: '+(reg?'OK':'KO'), reg?'ok':'bad');}}catch(e){{li('SW: KO '+e,'bad');}}}} else {{li('SW non supporté','warn');}}if('caches' in window){{const keys=await caches.keys(); li('Caches: '+(keys.length?keys.join(', '):'aucun'), keys.length?'ok':'warn');}}var standalone=window.navigator.standalone===true||(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches); li('Mode: '+(standalone?'App (standalone)':'Web (Safari/Chrome)'), standalone?'ok':'warn');document.getElementById('purge').onclick=async()=>{{try{{if('caches' in window){{for(const k of await caches.keys()) await caches.delete(k);}}if('serviceWorker' in navigator){{const regs=await navigator.serviceWorker.getRegistrations();for(const r of regs) await r.unregister();}}alert('Cache et SW purgés. Rechargement…'); location.replace('../?fresh={V}');}}catch(e){{alert('Échec purge: '+e);}}}})();", encoding="utf-8")
+              <div class="wrap">
+                <div>
+                  <div class="tabs">
+                    <button class="active" data-tab="build">Construire</button>
+                    <button data-tab="fleet">Flotte</button>
+                    <button data-tab="contracts">Contrats</button>
+                    <button data-tab="eco">Économie</button>
+                  </div>
+
+                  <div class="card" id="tab-build">
+                    <h3>Réseau routier</h3>
+                    <div class="row"><label>Ville A</label><select id="cityA"></select></div>
+                    <div class="row"><label>Ville B</label><select id="cityB"></select></div>
+                    <div class="row"><label>Niveau route</label>
+                      <select id="roadLvl">
+                        <option value="1">Niv.1 — 1 000$ (lent)</option>
+                        <option value="2">Niv.2 — 2 500$ (moyen)</option>
+                        <option value="3">Niv.3 — 6 000$ (rapide)</option>
+                      </select>
+                    </div>
+                    <button id="buildRoad">Construire / Améliorer</button>
+                  </div>
+
+                  <div class="card" id="tab-fleet" hidden>
+                    <h3>Flotte</h3>
+                    <div class="row"><label>Origine</label><select id="from"></select></div>
+                    <div class="row"><label>Destination</label><select id="to"></select></div>
+                    <div class="row"><label>Type</label>
+                      <select id="truckType">
+                        <option value="van">Fourgon</option>
+                        <option value="rigid">Porteur</option>
+                        <option value="semi">Semi</option>
+                      </select>
+                    </div>
+                    <button id="buyTruck">Acheter & assigner</button>
+                    <div id="fleetList"></div>
+                  </div>
+
+                  <div class="card" id="tab-contracts" hidden><h3>Contrats</h3><div id="contracts"></div></div>
+                  <div class="card" id="tab-eco" hidden><h3>Économie</h3><div id="eco"></div></div>
+                </div>
+
+                <div>
+                  <canvas id="view" width="1200" height="720"></canvas>
+                </div>
+              </div>
+
+              <div id="err"></div>
+
+              <script>
+                // SW + install + purge totale
+                (function(){
+                  const mode=document.getElementById('mode');
+                  const standalone = navigator.standalone === true || (matchMedia && matchMedia('(display-mode: standalone)').matches);
+                  mode.textContent='Mode: '+(standalone?'app':'web');
+
+                  const btnUpd=document.getElementById('btnUpdate');
+                  btnUpd.onclick=async ()=>{
+                    try{
+                      if('caches' in window){ for(const k of await caches.keys()) await caches.delete(k); }
+                      if('serviceWorker' in navigator){ const regs=await navigator.serviceWorker.getRegistrations(); for(const r of regs) await r.unregister(); }
+                    }catch(e){}
+                    location.replace('./?fresh={V}');
+                  };
+
+                  const btnInstall=document.getElementById('btnInstall');
+                  if(!standalone){
+                    let deferred;
+                    window.addEventListener('beforeinstallprompt',(e)=>{ e.preventDefault(); deferred=e; btnInstall.hidden=false; });
+                    btnInstall.onclick=()=>{ if(deferred){ deferred.prompt(); deferred=null; btnInstall.hidden=true; } };
+                  }
+                  if('serviceWorker' in navigator){ navigator.serviceWorker.register('./sw.js'); }
+                })();
+              </script>
+
+              <script src="./app.js?{V}"></script>
+            </body></html>
+          """), encoding="utf-8")
+
+          # --- app.js : villes par défaut, remplissage garanti, garde-fous solides + log visible
+          (out/"app.js").write_text(textwrap.dedent(r"""
+            // Capture et affichage d'erreurs
+            (function(){
+              const box=document.getElementById('err');
+              const push = (label, msg) => { box.classList.add('show'); box.textContent += `\n[${label}] ${msg}`; };
+              addEventListener('error',e=>push('error', e.message||e));
+              addEventListener('unhandledrejection',e=>push('promise', e.reason||e));
+              console.log('[TK] boot v10');
+            })();
+
+            // Données villes — fallback intégré (pas d’appel réseau)
+            const CITIES = [
+              {id:'A', name:'Port-Est', x:120,  y:520},
+              {id:'B', name:'Valbois',  x:360,  y:220},
+              {id:'C', name:'Fer-sur-Lac', x:760, y:180},
+              {id:'D', name:'Grainville', x:1040, y:520},
+              {id:'E', name:'Cap-Sud', x:560, y:560},
+              {id:'F', name:'Nordacier', x:1020, y:120}
+            ];
+
+            const $ = id => document.getElementById(id);
+            const selects = ['cityA','cityB','from','to'].map($);
+
+            function fillCities(){
+              try{
+                for(const sel of selects){
+                  if(!sel) continue;
+                  sel.innerHTML = '';
+                  for(const c of CITIES){
+                    const o=document.createElement('option');
+                    o.value=c.id; o.textContent=c.name;
+                    sel.appendChild(o);
+                  }
+                }
+                // valeurs par défaut
+                if($('cityA') && $('cityB')){
+                  $('cityA').value='A'; $('cityB').value='E';
+                }
+                if($('from') && $('to')){
+                  $('from').value='A'; $('to').value='B';
+                }
+              }catch(e){
+                console.error('fillCities failed', e);
+              }
+            }
+
+            // Rendu carte minimal (ne plante jamais si rien n'est choisi)
+            const view = $('view'), ctx = view.getContext('2d');
+            function draw(){
+              ctx.fillStyle='#0b0f16'; ctx.fillRect(0,0,view.width,view.height);
+              ctx.fillStyle='#9aa4b2';
+              for(const c of CITIES){ ctx.fillRect(c.x-2,c.y-2,4,4); ctx.fillText(c.name, c.x-20, c.y-8); }
+              requestAnimationFrame(draw);
+            }
+
+            // Onglets
+            document.querySelectorAll('.tabs button').forEach(b=>{
+              b.onclick=()=>{
+                document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));
+                b.classList.add('active');
+                const id=b.dataset.tab;
+                ['build','fleet','contracts','eco'].forEach(t=>{
+                  const el=document.getElementById('tab-'+t);
+                  if(el) el.hidden = (t!==id);
+                });
+              };
+            });
+
+            // Actions (stub robustes)
+            $('buildRoad').onclick=()=>{ alert('Route construite / améliorée (démo)'); };
+            $('buyTruck').onclick=()=>{ alert('Camion acheté (démo)'); };
+
+            // Initialisation SAFE
+            document.addEventListener('DOMContentLoaded', ()=>{
+              try{ fillCities(); }catch(e){ console.error(e); }
+              try{ draw(); }catch(e){ console.error(e); }
+            });
+          """), encoding="utf-8")
           PY
 
       - name: Upload artifact
@@ -93,7 +279,7 @@ jobs:
           path: _site
 
   deploy:
-    needs: build_and_test
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/deploy-pages@v4
