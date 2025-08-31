@@ -26,50 +26,62 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           import json, pathlib, textwrap
-          V="v10"  # bump cache et cache-busting
+          VER = "v10"  # bump cache et cache-busting
           out = pathlib.Path("_site"); out.mkdir(parents=True, exist_ok=True)
 
-          # --- manifest + icônes minimalistes
+          # -------- Manifest + icônes --------
           (out/"manifest.webmanifest").write_text(json.dumps({
-            "name":"TK Tycoon Freight Deluxe",
-            "short_name":"TK Tycoon",
-            "start_url":"./",
-            "scope":"./",
-            "display":"standalone",
-            "background_color":"#0f1115",
-            "theme_color":"#0f1115",
-            "icons":[
-              {"src":"icon-192.png","sizes":"192x192","type":"image/png"},
-              {"src":"icon-512.png","sizes":"512x512","type":"image/png"}
-            ]
+              "name":"TK Tycoon Freight Deluxe",
+              "short_name":"TK Tycoon",
+              "start_url":"./",
+              "scope":"./",
+              "display":"standalone",
+              "background_color":"#0f1115",
+              "theme_color":"#0f1115",
+              "icons":[
+                {"src":"icon-192.png","sizes":"192x192","type":"image/png"},
+                {"src":"icon-512.png","sizes":"512x512","type":"image/png"}
+              ]
           }, indent=2), encoding="utf-8")
-          tiny = bytes.fromhex("89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C4890000000A49444154789C6360000002000154010A9B0000000049454E44AE426082")
+
+          tiny = bytes.fromhex(
+            "89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C489"
+            "0000000A49444154789C6360000002000154010A9B0000000049454E44AE426082"
+          )
           for f in ("icon-192.png","icon-512.png","apple-touch-icon.png"):
             (out/f).write_bytes(tiny)
 
-          # --- service worker : anti-cache agressif (skipWaiting+claim) + cache-bust app.js?v=V
+          # -------- Service worker (anti-cache agressif) --------
           (out/"sw.js").write_text(textwrap.dedent(f"""
-            const CACHE='tktycoon-{V}';
-            const ASSETS=['./','./index.html','./style.css','./app.js?{V}','./manifest.webmanifest','./apple-touch-icon.png'];
-            self.addEventListener('install',e=>{{
+            const CACHE = 'tktycoon-{VER}';
+            const ASSETS = [
+              './','./index.html','./style.css','./app.js?{VER}',
+              './manifest.webmanifest','./apple-touch-icon.png'
+            ];
+            self.addEventListener('install', e => {{
               self.skipWaiting();
-              e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));
+              e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
             }});
-            self.addEventListener('activate',e=>{{
+            self.addEventListener('activate', e => {{
               e.waitUntil(
-                caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())
+                caches.keys().then(keys =>
+                  Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+                ).then(() => self.clients.claim())
               );
             }});
-            self.addEventListener('fetch',e=>{{
+            self.addEventListener('fetch', e => {{
               e.respondWith(
-                caches.match(e.request,{{ignoreSearch:true}}).then(r=>r||fetch(e.request).then(res=>{{
-                  const cp=res.clone(); caches.open(CACHE).then(c=>c.put(e.request,cp)); return res;
-                }}).catch(()=>r))
+                caches.match(e.request, {{ ignoreSearch:true }})
+                  .then(r => r || fetch(e.request).then(res => {{
+                    const cp = res.clone();
+                    caches.open(CACHE).then(c => c.put(e.request, cp));
+                    return res;
+                  }}).catch(() => r))
               );
             }});
           """), encoding="utf-8")
 
-          # --- style compact
+          # -------- Styles --------
           (out/"style.css").write_text(textwrap.dedent("""
             :root{--bg:#0f1115;--panel:#141820;--line:#2a2f3a;--txt:#e6e6e6;--acc:#75c46b}
             *{box-sizing:border-box} html,body{height:100%}
@@ -89,10 +101,13 @@ jobs:
             #err.show{display:block}
           """), encoding="utf-8")
 
-          # --- HTML : appelle app.js avec ?v=V, bouton "Mettre à jour" qui purge tout
+          # -------- HTML --------
           (out/"index.html").write_text(textwrap.dedent(f"""
-            <!doctype html><html lang="fr"><head>
-              <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+            <!doctype html>
+            <html lang="fr">
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
               <title>TK Tycoon Freight Deluxe</title>
               <meta name="theme-color" content="#0f1115">
               <link rel="manifest" href="./manifest.webmanifest">
@@ -101,7 +116,8 @@ jobs:
               <meta name="apple-mobile-web-app-title" content="TK Tycoon">
               <link rel="apple-touch-icon" href="./apple-touch-icon.png">
               <link rel="stylesheet" href="./style.css">
-            </head><body>
+            </head>
+            <body>
               <div class="bar">
                 <div>
                   <span class="pill">🚚 TK Tycoon</span>
@@ -163,88 +179,91 @@ jobs:
               <div id="err"></div>
 
               <script>
-                // SW + install + purge totale
-                (function(){
-                  const mode=document.getElementById('mode');
-                  const standalone = navigator.standalone === true || (matchMedia && matchMedia('(display-mode: standalone)').matches);
-                  mode.textContent='Mode: '+(standalone?'app':'web');
+                (function(){{
+                  const mode = document.getElementById('mode');
+                  const standalone = (navigator.standalone === true) ||
+                    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+                  mode.textContent = 'Mode: ' + (standalone ? 'app' : 'web');
 
-                  const btnUpd=document.getElementById('btnUpdate');
-                  btnUpd.onclick=async ()=>{
-                    try{
-                      if('caches' in window){ for(const k of await caches.keys()) await caches.delete(k); }
-                      if('serviceWorker' in navigator){ const regs=await navigator.serviceWorker.getRegistrations(); for(const r of regs) await r.unregister(); }
-                    }catch(e){}
-                    location.replace('./?fresh={V}');
-                  };
+                  const btnUpd = document.getElementById('btnUpdate');
+                  btnUpd.onclick = async () => {{
+                    try {{
+                      if ('caches' in window) {{ for (const k of await caches.keys()) await caches.delete(k); }}
+                      if ('serviceWorker' in navigator) {{
+                        const regs = await navigator.serviceWorker.getRegistrations();
+                        for (const r of regs) await r.unregister();
+                      }}
+                    }} catch (e) {{}}
+                    location.replace('./?fresh={VER}');
+                  }};
 
-                  const btnInstall=document.getElementById('btnInstall');
-                  if(!standalone){
+                  const btnInstall = document.getElementById('btnInstall');
+                  if (!standalone) {{
                     let deferred;
-                    window.addEventListener('beforeinstallprompt',(e)=>{ e.preventDefault(); deferred=e; btnInstall.hidden=false; });
-                    btnInstall.onclick=()=>{ if(deferred){ deferred.prompt(); deferred=null; btnInstall.hidden=true; } };
-                  }
-                  if('serviceWorker' in navigator){ navigator.serviceWorker.register('./sw.js'); }
-                })();
+                    window.addEventListener('beforeinstallprompt', (e) => {{
+                      e.preventDefault(); deferred = e; btnInstall.hidden = false;
+                    }});
+                    btnInstall.onclick = () => {{ if (deferred) {{ deferred.prompt(); deferred = null; btnInstall.hidden = true; }} }};
+                  }}
+
+                  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
+                }})();
               </script>
 
-              <script src="./app.js?{V}"></script>
-            </body></html>
+              <script src="./app.js?{VER}"></script>
+            </body>
+            </html>
           """), encoding="utf-8")
 
-          # --- app.js : villes par défaut, remplissage garanti, garde-fous solides + log visible
+          # -------- app.js --------
           (out/"app.js").write_text(textwrap.dedent(r"""
-            // Capture et affichage d'erreurs
+            // Panneau d'erreurs visible
             (function(){
               const box=document.getElementById('err');
-              const push = (label, msg) => { box.classList.add('show'); box.textContent += `\n[${label}] ${msg}`; };
-              addEventListener('error',e=>push('error', e.message||e));
-              addEventListener('unhandledrejection',e=>push('promise', e.reason||e));
+              const show=(t,m)=>{ box.classList.add('show'); box.textContent += `\n[${t}] ${m}`; };
+              addEventListener('error',e=>show('error', e.message||e));
+              addEventListener('unhandledrejection',e=>show('promise', e.reason||e));
               console.log('[TK] boot v10');
             })();
 
-            // Données villes — fallback intégré (pas d’appel réseau)
-            const CITIES = [
-              {id:'A', name:'Port-Est', x:120,  y:520},
-              {id:'B', name:'Valbois',  x:360,  y:220},
-              {id:'C', name:'Fer-sur-Lac', x:760, y:180},
-              {id:'D', name:'Grainville', x:1040, y:520},
-              {id:'E', name:'Cap-Sud', x:560, y:560},
-              {id:'F', name:'Nordacier', x:1020, y:120}
+            // Villes (fallback intégré)
+            const CITIES=[
+              {id:'A',name:'Port-Est',x:120,y:520},
+              {id:'B',name:'Valbois',x:360,y:220},
+              {id:'C',name:'Fer-sur-Lac',x:760,y:180},
+              {id:'D',name:'Grainville',x:1040,y:520},
+              {id:'E',name:'Cap-Sud',x:560,y:560},
+              {id:'F',name:'Nordacier',x:1020,y:120}
             ];
-
-            const $ = id => document.getElementById(id);
-            const selects = ['cityA','cityB','from','to'].map($);
+            const $=id=>document.getElementById(id);
 
             function fillCities(){
-              try{
-                for(const sel of selects){
-                  if(!sel) continue;
-                  sel.innerHTML = '';
-                  for(const c of CITIES){
-                    const o=document.createElement('option');
-                    o.value=c.id; o.textContent=c.name;
-                    sel.appendChild(o);
-                  }
+              const sels=[$('cityA'),$('cityB'),$('from'),$('to')];
+              for(const sel of sels){
+                if(!sel) continue;
+                sel.innerHTML='';
+                for(const c of CITIES){
+                  const o=document.createElement('option');
+                  o.value=c.id; o.textContent=c.name;
+                  sel.appendChild(o);
                 }
-                // valeurs par défaut
-                if($('cityA') && $('cityB')){
-                  $('cityA').value='A'; $('cityB').value='E';
-                }
-                if($('from') && $('to')){
-                  $('from').value='A'; $('to').value='B';
-                }
-              }catch(e){
-                console.error('fillCities failed', e);
               }
+              if($('cityA')) $('cityA').value='A';
+              if($('cityB')) $('cityB').value='E';
+              if($('from')) $('from').value='A';
+              if($('to')) $('to').value='B';
             }
 
-            // Rendu carte minimal (ne plante jamais si rien n'est choisi)
-            const view = $('view'), ctx = view.getContext('2d');
+            // Canvas simple (ne plante pas)
+            const view=$('view'), ctx=view.getContext('2d');
             function draw(){
               ctx.fillStyle='#0b0f16'; ctx.fillRect(0,0,view.width,view.height);
               ctx.fillStyle='#9aa4b2';
-              for(const c of CITIES){ ctx.fillRect(c.x-2,c.y-2,4,4); ctx.fillText(c.name, c.x-20, c.y-8); }
+              ctx.font='12px system-ui';
+              for(const c of CITIES){
+                ctx.fillRect(c.x-2,c.y-2,4,4);
+                ctx.fillText(c.name,c.x-22,c.y-8);
+              }
               requestAnimationFrame(draw);
             }
 
@@ -254,18 +273,19 @@ jobs:
                 document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));
                 b.classList.add('active');
                 const id=b.dataset.tab;
-                ['build','fleet','contracts','eco'].forEach(t=>{
+                for(const t of ['build','fleet','contracts','eco']){
                   const el=document.getElementById('tab-'+t);
-                  if(el) el.hidden = (t!==id);
-                });
+                  if(el) el.hidden=(t!==id);
+                }
               };
             });
 
-            // Actions (stub robustes)
-            $('buildRoad').onclick=()=>{ alert('Route construite / améliorée (démo)'); };
-            $('buyTruck').onclick=()=>{ alert('Camion acheté (démo)'); };
+            // Actions (stubs)
+            const br=$('buildRoad'), bt=$('buyTruck');
+            if(br) br.onclick=()=>alert('Route construite / améliorée (démo)');
+            if(bt) bt.onclick=()=>alert('Camion acheté (démo)');
 
-            // Initialisation SAFE
+            // Init
             document.addEventListener('DOMContentLoaded', ()=>{
               try{ fillCities(); }catch(e){ console.error(e); }
               try{ draw(); }catch(e){ console.error(e); }
