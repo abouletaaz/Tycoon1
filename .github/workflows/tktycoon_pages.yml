@@ -1,4 +1,4 @@
-name: TK Tycoon — Skin cartoon (v12)
+name: SimAgri Tycoon — final (v13)
 
 on:
   push:
@@ -20,19 +20,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build site (PWA + cartoon UI)
+      - name: Build site (PWA + game)
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json, pathlib, textwrap
-          VER="v12"
+          import json, pathlib, textwrap, random
+          VER="v13"
           out=pathlib.Path("_site"); out.mkdir(parents=True, exist_ok=True)
 
-          # Manifest + icônes min
+          # ---------- Manifest + mini-icônes ----------
           (out/"manifest.webmanifest").write_text(json.dumps({
-            "name":"TK Tycoon Freight Deluxe",
-            "short_name":"TK Tycoon",
+            "name":"SimAgri Tycoon",
+            "short_name":"SimAgri",
             "start_url":"./",
             "scope":"./",
             "display":"standalone",
@@ -47,23 +47,24 @@ jobs:
           for f in ("icon-192.png","icon-512.png","apple-touch-icon.png"):
             (out/f).write_bytes(tiny)
 
-          # SW agressif + cache-bust
+          # ---------- Service worker (cache-bust agressif) ----------
           (out/"sw.js").write_text(textwrap.dedent(f"""
-            const CACHE='tktycoon-{VER}';
+            const CACHE='simagri-{VER}';
             const ASSETS=['./','./index.html','./style.css','./app.js?{VER}','./manifest.webmanifest','./apple-touch-icon.png'];
             self.addEventListener('install',e=>{{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));}});
-            self.addEventListener('activate',e=>{{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE).map(x=>caches.delete(x)))).then(()=>self.clients.claim()));}});
+            self.addEventListener('activate',e=>{{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE).map(x=>caches.delete(x)))) .then(()=>self.clients.claim()));}});
             self.addEventListener('fetch',e=>{{e.respondWith(caches.match(e.request,{{ignoreSearch:true}}).then(r=>r||fetch(e.request).then(res=>{{const cp=res.clone();caches.open(CACHE).then(c=>c.put(e.request,cp));return res;}}).catch(()=>r)));}});
           """), encoding="utf-8")
 
-          # Style cartoon (bleu/vert, glossy, badges)
+          # ---------- Style cartoon + UI ----------
           (out/"style.css").write_text(textwrap.dedent("""
             :root{
-              --blue:#1f6feb; --blue2:#3489ff; --blue3:#0b2942;
-              --green:#79d35e; --green2:#baf57f; --land:#5fb35a;
-              --panel:#101827; --line:#22304a; --txt:#f2f6ff; --mut:#99a7c2; --accent:#ffd54d;
+              --blue:#1f6feb; --blue2:#3489ff; --sea1:#0a3d66; --sea2:#08304f;
+              --land1:#7edc69; --land2:#4fae4b; --sand:#f5d77a;
+              --panel:#101827; --line:#1d2b47; --txt:#f2f6ff; --mut:#a6b3cc;
+              --ok:#2ed77c; --warn:#ffd54d; --bad:#ff6f6f;
             }
-            *{box-sizing:border-box} html,body{height:100%}
+            *{box-sizing:border-box}html,body{height:100%}
             body{margin:0;background:linear-gradient(180deg,#0b1526,#0e1b30 60%,#0b1526);color:var(--txt);font:14px system-ui,Segoe UI,Roboto}
             .appbar{position:sticky;top:0;z-index:20;padding:8px 12px;border-bottom:1px solid #0e2542;
               background:linear-gradient(180deg,#0a2b57,#092446);display:flex;justify-content:space-between;align-items:center}
@@ -71,7 +72,7 @@ jobs:
             .badge{background:linear-gradient(180deg,var(--blue2),var(--blue));border:1px solid #0d3a7a;color:#fff;padding:6px 10px;border-radius:999px;font-weight:800;letter-spacing:.2px;box-shadow:0 2px 0 #0b2b5a}
             .btn{border:0;background:linear-gradient(180deg,#ffd86b,#ffb32d);color:#422e02;border-radius:12px;padding:8px 12px;font-weight:800;box-shadow:0 3px 0 #b57a11}
             .btn.secondary{background:linear-gradient(180deg,#2ed77c,#18b85f);box-shadow:0 3px 0 #0a6d36;color:#061a0f}
-            .wrap{max-width:1280px;margin:12px auto;padding:0 12px;display:grid;grid-template-columns:380px 1fr;gap:12px}
+            .wrap{max-width:1280px;margin:12px auto;padding:0 12px;display:grid;grid-template-columns:390px 1fr;gap:12px}
             @media(max-width:980px){.wrap{grid-template-columns:1fr}}
             .panel{background:linear-gradient(180deg,#111b2c,#0f1726);border:1px solid var(--line);border-radius:16px;box-shadow:0 6px 18px rgba(0,0,0,.35);padding:12px}
             .tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
@@ -80,20 +81,22 @@ jobs:
             label{font-weight:700;color:#cfe1ff}
             select,button{width:100%;padding:.65rem;border-radius:12px;border:1px solid #1f304f;background:#0f1a2e;color:#eaf1ff}
             .row{display:grid;gap:6px;margin:.45rem 0}
-            #view{width:100%;height:56vh;display:block;border-radius:16px;border:2px solid #16335f;background:#072034;box-shadow:inset 0 0 0 1px #0b274a}
+            #view{width:100%;height:58vh;display:block;border-radius:16px;border:2px solid #16335f;background:#072034;box-shadow:inset 0 0 0 1px #0b274a}
             .statbar{display:flex;gap:8px;align-items:center}
-            .stat{display:flex;gap:6px;align-items:center;background:#0c1a2f;border:1px solid #16335f;border-radius:12px;padding:6px 10px}
+            .chip{display:flex;gap:6px;align-items:center;background:#0c1a2f;border:1px solid #16335f;border-radius:12px;padding:6px 10px}
             .dot{width:10px;height:10px;border-radius:999px}
-            .dot.gold{background:#ffd54d}.dot.fuel{background:#ff6f6f}.dot.road{background:#77e085}
+            .dot.coin{background:var(--warn)} .dot.fuel{background:var(--bad)} .dot.maint{background:var(--ok)}
+            .list{display:grid;gap:8px}
+            .card{background:#0f1b2e;border:1px solid #1b2a4a;border-radius:12px;padding:8px}
             #err{position:fixed;left:8px;bottom:8px;right:8px;max-height:34vh;overflow:auto;background:#331b1b;border:1px solid #5a2c2c;color:#ffd6d6;padding:8px;border-radius:12px;font:12px ui-monospace,Menlo,monospace;display:none;white-space:pre-wrap}
             #err.show{display:block}
           """), encoding="utf-8")
 
-          # HTML
+          # ---------- HTML ----------
           (out/"index.html").write_text(textwrap.dedent(f"""
             <!doctype html><html lang="fr"><head>
               <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-              <title>TK Tycoon Freight Deluxe</title>
+              <title>SimAgri Tycoon</title>
               <meta name="theme-color" content="#1f6feb">
               <link rel="manifest" href="./manifest.webmanifest">
               <meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -102,11 +105,11 @@ jobs:
             </head><body>
               <div class="appbar">
                 <div class="brand">
-                  <span class="badge">🚚 TK Tycoon</span>
+                  <span class="badge">🌾🚚 SimAgri</span>
                   <div class="statbar">
-                    <span class="stat"><span class="dot gold"></span><b id="money">0</b></span>
-                    <span class="stat"><span class="dot fuel"></span><b id="fuel">0</b></span>
-                    <span class="stat"><span class="dot road"></span><b id="maint">0</b></span>
+                    <span class="chip"><span class="dot coin"></span><b id="money">0</b> $</span>
+                    <span class="chip"><span class="dot fuel"></span><b id="fuelPrice">0</b> $/L</span>
+                    <span class="chip"><span class="dot maint"></span>Jour <b id="day">1</b></span>
                   </div>
                 </div>
                 <div>
@@ -117,7 +120,7 @@ jobs:
 
               <div class="wrap">
                 <div class="panel">
-                  <div style="display:flex;gap:8px;margin-bottom:8px">
+                  <div class="tabs">
                     <button class="tab active" data-tab="build">Construire</button>
                     <button class="tab" data-tab="fleet">Flotte</button>
                     <button class="tab" data-tab="contracts">Contrats</button>
@@ -125,7 +128,6 @@ jobs:
                   </div>
 
                   <div id="tab-build">
-                    <h3>Réseau routier</h3>
                     <div class="row"><label>Ville A</label><select id="cityA"></select></div>
                     <div class="row"><label>Ville B</label><select id="cityB"></select></div>
                     <div class="row"><label>Niveau route</label>
@@ -139,22 +141,30 @@ jobs:
                   </div>
 
                   <div id="tab-fleet" hidden>
-                    <h3>Flotte</h3>
                     <div class="row"><label>Origine</label><select id="from"></select></div>
                     <div class="row"><label>Destination</label><select id="to"></select></div>
-                    <div class="row"><label>Type</label>
+                    <div class="row"><label>Camion</label>
                       <select id="truckType">
-                        <option value="van">Fourgon</option>
-                        <option value="rigid">Porteur</option>
-                        <option value="semi">Semi</option>
+                        <option value="van">Fourgon — cap. 4 — 0.6L/km — 12k$</option>
+                        <option value="rigid">Porteur — cap. 8 — 1.0L/km — 28k$</option>
+                        <option value="semi">Semi — cap. 16 — 1.8L/km — 55k$</option>
                       </select>
                     </div>
                     <button id="buyTruck" class="btn secondary">Acheter & assigner</button>
-                    <div id="fleetList" style="margin-top:8px"></div>
+                    <div id="fleetList" class="list" style="margin-top:8px"></div>
                   </div>
 
-                  <div id="tab-contracts" hidden><h3>Contrats</h3><div id="contracts"></div></div>
-                  <div id="tab-eco" hidden><h3>Économie</h3><div id="eco"></div></div>
+                  <div id="tab-contracts" hidden>
+                    <div id="contractList" class="list"></div>
+                    <button id="regenContracts" class="btn" style="margin-top:6px">Nouveaux contrats</button>
+                  </div>
+
+                  <div id="tab-eco" hidden>
+                    <div class="card">Prix carburant: <b id="ecoFuel">—</b> $/L</div>
+                    <div class="card">Maintenance/jour: <b id="ecoMaint">—</b> $</div>
+                    <div class="card">Revenus hier: <b id="ecoY">—</b> $</div>
+                    <button id="reset" class="btn" style="margin-top:6px">Réinitialiser partie</button>
+                  </div>
                 </div>
 
                 <div class="panel">
@@ -174,8 +184,8 @@ jobs:
                     }}catch(e){{}}
                     location.replace('./?fresh={VER}');
                   }};
-                  const inst=document.getElementById('btnInstall');
-                  let deferred; window.addEventListener('beforeinstallprompt',e=>{{e.preventDefault();deferred=e;inst.hidden=false}});
+                  const inst=document.getElementById('btnInstall'); let deferred;
+                  window.addEventListener('beforeinstallprompt',e=>{{e.preventDefault();deferred=e;inst.hidden=false}});
                   inst.onclick=()=>{{ if(deferred){{deferred.prompt(); deferred=null; inst.hidden=true;}} }};
                   if('serviceWorker'in navigator) navigator.serviceWorker.register('./sw.js');
                 }})();
@@ -185,60 +195,213 @@ jobs:
             </body></html>
           """), encoding="utf-8")
 
-          # JS : rendu cartoon + HiDPI + badges
+          # ---------- app.js (simulation + rendu) ----------
           (out/"app.js").write_text(textwrap.dedent(r"""
-            // ===== Error pane =====
+            // ===== Error pane visible =====
             (function(){
               const box=document.getElementById('err');
               const log=(t,m)=>{box.classList.add('show');box.textContent+=`\n[${t}] ${m}`;}
               addEventListener('error',e=>log('error',e.message||e));
               addEventListener('unhandledrejection',e=>log('promise',e.reason||e));
-              console.log('[TK] v12 boot');
+              console.log('[SimAgri] v13 boot');
             })();
 
+            // ==== Données de base ====
+            const PRODUCTS={ grain:{name:'Blé'}, milk:{name:'Lait'}, logs:{name:'Grumes'}, planks:{name:'Planches'} };
             const CITIES=[
-              {id:'A',name:'Port-Est',x:140,y:440,pop:52},
-              {id:'B',name:'Valbois',x:320,y:210,pop:35},
-              {id:'C',name:'Fer-sur-Lac',x:700,y:160,pop:44},
-              {id:'D',name:'Grainville',x:980,y:480,pop:47},
-              {id:'E',name:'Cap-Sud',x:540,y:520,pop:51},
-              {id:'F',name:'Nordacier',x:1000,y:120,pop:40}
+              {id:'A',name:'Ferme-Marine',x:140,y:440, inds:{farm:['grain'], dairy:['milk']}},
+              {id:'B',name:'Valbois',x:320,y:210, inds:{sawmill:['planks'], forest:['logs']}},
+              {id:'C',name:'Lac-Fer',x:700,y:160, inds:{forest:['logs']}},
+              {id:'D',name:'Grainville',x:980,y:480, inds:{farm:['grain']}},
+              {id:'E',name:'Cap-Sud',x:540,y:520, inds:{dairy:['milk'], sawmill:['planks']}},
+              {id:'F',name:'Nordacier',x:1000,y:120, inds:{}}
             ];
-            const ROADS=[
-              ['A','B'],['B','C'],['C','D'],['A','E'],['E','D'],['B','E']
-            ];
+            let ROADS=[ ['A','B',1], ['B','C',1], ['C','D',1], ['A','E',2], ['E','D',2], ['B','E',1] ];
+            const TRUCK_TYPES={
+              van:{name:'Fourgon',cap:4,fuel:0.6,cost:12000,speed:55},
+              rigid:{name:'Porteur',cap:8,fuel:1.0,cost:28000,speed:65},
+              semi:{name:'Semi',cap:16,fuel:1.8,cost:55000,speed:75},
+            };
 
+            // ==== Etat du jeu ====
+            const S = JSON.parse(localStorage.getItem('simagri_save')||'null') || {
+              money: 120000, day: 1, fuelPrice: 1.7, maintDay: 120,
+              roads: ROADS, trucks: [], jobs: [], revenueYesterday: 0
+            };
+
+            // ==== UI helpers ====
             const $=id=>document.getElementById(id);
+            function fmt(n){ return Math.round(n).toLocaleString('fr-FR'); }
+            function save(){ localStorage.setItem('simagri_save', JSON.stringify(S)); }
 
-            // UI lists
+            // ==== Distances ====
+            function cityBy(id){ return CITIES.find(c=>c.id===id); }
+            function dist(a,b){ const A=cityBy(a), B=cityBy(b); const dx=A.x-B.x, dy=A.y-B.y; return Math.hypot(dx,dy)/10; } // ~km
+
+            // ==== Routes ====
+            function levelBetween(a,b){
+              const r=S.roads.find(r=> (r[0]===a && r[1]===b) || (r[0]===b && r[1]===a) );
+              return r ? r[2] : 0;
+            }
+            function buildRoad(a,b,lvl){
+              const ex=levelBetween(a,b);
+              const cost = [0,1000,2500,6000][lvl] - [0,1000,2500,6000][Math.max(ex,1)];
+              if(cost>0 && S.money<cost) return false;
+              if(cost>0) S.money -= cost;
+              if(ex===0) S.roads.push([a,b,lvl]); else {
+                S.roads = S.roads.map(r=> ( (r[0]===a&&r[1]===b)||(r[0]===b&&r[1]===a) ) ? [r[0],r[1],lvl] : r );
+              }
+              return true;
+            }
+
+            // ==== Contrats (fret) ====
+            function randomContract(){
+              const cities=CITIES.map(c=>c.id);
+              let o=cities[Math.floor(Math.random()*cities.length)];
+              let d=cities[Math.floor(Math.random()*cities.length)];
+              if(o===d) d = cities[(cities.indexOf(d)+1)%cities.length];
+              const goods = Object.keys(PRODUCTS);
+              const g = goods[Math.floor(Math.random()*goods.length)];
+              const q = [3,4,6,8,10,12][Math.floor(Math.random()*6)];
+              const distance = dist(o,d);
+              const price = Math.max(50, 18*distance*q) * (1 + (Math.random()*0.4-0.2));
+              return {id:'K'+Math.random().toString(36).slice(2,7), from:o, to:d, good:g, qty:q, price:Math.round(price)};
+            }
+            function regenContracts(n=5){ S.jobs = Array.from({length:n}, ()=>randomContract()); }
+
+            // ==== Flotte / missions ====
+            function buyAndAssign(type, a, b){
+              const t=TRUCK_TYPES[type]; if(!t) return false;
+              if(S.money < t.cost) return false;
+              S.money -= t.cost;
+              const id='T'+Math.random().toString(36).slice(2,7);
+              const lv=levelBetween(a,b)||1;
+              const km = dist(a,b);
+              const speed = t.speed * (1 + 0.15*(lv-1));
+              const hours = km / speed * 60; // en minutes
+              const load = Math.min(t.cap, 8);
+              const income = Math.round(22*km*load);
+              const fuel = km * t.fuel * S.fuelPrice;
+              S.trucks.push({id,type,from:a,to:b,prog:0,km,minutes:Math.max(8,Math.round(hours)),load,income,fuel,dir:1});
+              return true;
+            }
+
+            // ==== SIM LOOP ====
+            let sec = 0; // secondes simulées depuis début de journée
+            function tick(){
+              sec++; // 1 tick = 1 seconde
+              // Avance flotte
+              for(const t of S.trucks){
+                t.prog += 1/t.minutes;
+                if(t.prog>=1){
+                  S.money += Math.max(0, t.income - t.fuel - 2*t.minutes); // revenu net simple
+                  t.prog = 0;
+                  // inverser sens (A<->B) pour navette
+                  const old=t.from; t.from=t.to; t.to=old;
+                }
+              }
+              if(sec%5===0){ // frais réguliers (maintenance légère)
+                S.money -= (S.maintDay/ (24*60*60/5)); // lissé
+              }
+              if(sec>=60){ // 1 minute => affiche/rafraîchit, 1 jour = 10 min IRL si on veut changer
+                sec=0;
+              }
+            }
+            setInterval(()=>{ try{ tick(); renderHUD(); draw(); save(); }catch(e){ console.error(e); } }, 1000);
+
+            // ==== UI binding ====
             function fillCities(){
-              const fill=(sel)=>{ sel.innerHTML=''; for(const c of CITIES){ const o=document.createElement('option'); o.value=c.id;o.textContent=c.name;sel.appendChild(o);} };
-              ['cityA','cityB','from','to'].map($).forEach(s=>s&&fill(s));
+              const lists=['cityA','cityB','from','to'].map($);
+              for(const sel of lists){
+                if(!sel) continue;
+                sel.innerHTML='';
+                for(const c of CITIES){
+                  const o=document.createElement('option');
+                  o.value=c.id; o.textContent=c.name; sel.appendChild(o);
+                }
+              }
               if($('cityA')) $('cityA').value='A'; if($('cityB')) $('cityB').value='E';
               if($('from')) $('from').value='A'; if($('to')) $('to').value='B';
             }
+            $('buildRoad').onclick=()=>{
+              const a=$('cityA').value, b=$('cityB').value, lvl=+$('roadLvl').value;
+              if(a===b) return alert('Choisis deux villes différentes.');
+              const ok=buildRoad(a,b,lvl);
+              if(!ok) alert('Fonds insuffisants.');
+              draw(); renderHUD(); save();
+            };
+            $('buyTruck').onclick=()=>{
+              const ok=buyAndAssign($('truckType').value, $('from').value, $('to').value);
+              if(!ok) alert('Impossible (fonds ?)');
+              renderFleet(); renderHUD(); save();
+            };
+            $('regenContracts').onclick=()=>{ regenContracts(); renderContracts(); save(); };
+            $('reset').onclick=()=>{ localStorage.removeItem('simagri_save'); location.reload(); };
 
-            // ===== Canvas & HiDPI =====
+            function renderHUD(){
+              $('money').textContent = fmt(S.money);
+              $('fuelPrice').textContent = S.fuelPrice.toFixed(2);
+              $('day').textContent = S.day;
+              $('ecoFuel').textContent = S.fuelPrice.toFixed(2);
+              $('ecoMaint').textContent = fmt(S.maintDay);
+              $('ecoY').textContent = fmt(S.revenueYesterday);
+            }
+
+            function renderFleet(){
+              const box=$('fleetList'); box.innerHTML='';
+              for(const t of S.trucks){
+                const type=TRUCK_TYPES[t.type];
+                const div=document.createElement('div');
+                div.className='card';
+                const pct=Math.round(t.prog*100);
+                div.innerHTML = `<b>${type.name}</b> ${t.from}→${t.to} • ${t.load}u • ${t.minutes}m
+                  <div style="height:8px;background:#0b1322;border:1px solid #1a2b4b;border-radius:6px;margin-top:4px">
+                    <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,#2ed77c,#13b566);border-radius:6px"></div>
+                  </div>`;
+                box.appendChild(div);
+              }
+            }
+
+            function renderContracts(){
+              const box=$('contractList'); box.innerHTML='';
+              if(!S.jobs.length) regenContracts();
+              for(const k of S.jobs){
+                const div=document.createElement('div'); div.className='card';
+                const g=PRODUCTS[k.good].name;
+                div.innerHTML = `<b>${g}</b> • ${k.qty}u — ${k.from}→${k.to} — <b>${fmt(k.price)}$</b>
+                  <div style="display:flex;gap:6px;margin-top:6px">
+                    <button class="btn secondary" id="acc_${k.id}">Accepter</button>
+                  </div>`;
+                box.appendChild(div);
+                div.querySelector(`#acc_${k.id}`).onclick=()=>{
+                  // pour la démo, crédit immédiat si route existe
+                  if(levelBetween(k.from,k.to)===0){ alert('Construis d’abord la route.'); return; }
+                  S.money += k.price; S.jobs = S.jobs.filter(x=>x.id!==k.id);
+                  renderHUD(); renderContracts(); save();
+                };
+              }
+            }
+
+            // ==== Canvas & rendu cartoon ====
             const canvas=$('view'), ctx=canvas.getContext('2d');
             function resize(){
               const dpr=Math.max(1,window.devicePixelRatio||1);
               const r=canvas.getBoundingClientRect();
-              const w=Math.max(700,r.width), h=Math.max(380, r.height||window.innerHeight*0.56);
+              const w=Math.max(700,r.width), h=Math.max(380, r.height||window.innerHeight*0.58);
               canvas.width=Math.round(w*dpr); canvas.height=Math.round(h*dpr);
               canvas.style.height=h+'px';
               ctx.setTransform(dpr,0,0,dpr,0,0);
             }
-            window.addEventListener('resize',resize);
+            window.addEventListener('resize',()=>{ resize(); draw(); });
 
-            // ===== Drawing helpers =====
             function roundedRectPath(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
             function drawMap(){
               const w=canvas.width/(window.devicePixelRatio||1), h=canvas.height/(window.devicePixelRatio||1);
-              // sea
+              // mer
               const seaGrad=ctx.createLinearGradient(0,0,0,h);
               seaGrad.addColorStop(0,'#0a3d66'); seaGrad.addColorStop(1,'#08304f');
               ctx.fillStyle=seaGrad; ctx.fillRect(0,0,w,h);
-              // land shape (large polygon)
+              // terre
               ctx.save();
               ctx.beginPath();
               ctx.moveTo(w*0.22,0);
@@ -249,73 +412,70 @@ jobs:
               const landGrad=ctx.createLinearGradient(0,0,0,h);
               landGrad.addColorStop(0,'#7edc69'); landGrad.addColorStop(1,'#4fae4b');
               ctx.fillStyle=landGrad; ctx.fill();
-              // beach edge
-              ctx.strokeStyle='rgba(253,216,120,.85)'; ctx.lineWidth=10; ctx.stroke();
+              ctx.strokeStyle='rgba(253,216,120,.9)'; ctx.lineWidth=10; ctx.stroke(); // plage
               ctx.restore();
-
-              // grid soft
-              ctx.save();
-              ctx.strokeStyle='rgba(255,255,255,.06)'; ctx.lineWidth=1;
+              // grille douce
+              ctx.save(); ctx.strokeStyle='rgba(255,255,255,.06)'; ctx.lineWidth=1;
               for(let gx=0; gx<w; gx+=80){ ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,h); ctx.stroke(); }
               for(let gy=0; gy<h; gy+=80){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(w,gy); ctx.stroke(); }
               ctx.restore();
             }
-            function cityById(id){ return CITIES.find(c=>c.id===id); }
-            function drawRoads(){
+            function drawRoad(a,b,lvl){
+              const A=cityBy(a), B=cityBy(b);
               ctx.lineJoin='round'; ctx.lineCap='round';
-              for(const [a,b] of ROADS){
-                const A=cityById(a), B=cityById(b);
-                // shadow
-                ctx.strokeStyle='rgba(0,0,0,.45)'; ctx.lineWidth=10; ctx.beginPath(); ctx.moveTo(A.x,B.y+2); ctx.lineTo(B.x,A.y+2); ctx.stroke();
-                // asphalt
-                ctx.strokeStyle='#2b3a52'; ctx.lineWidth=8; ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
-                // center line
-                ctx.setLineDash([10,10]); ctx.strokeStyle='#f6f1a0'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
-                ctx.setLineDash([]);
-              }
+              ctx.strokeStyle='rgba(0,0,0,.45)'; ctx.lineWidth=10; ctx.beginPath(); ctx.moveTo(A.x,B.y+2); ctx.lineTo(B.x,A.y+2); ctx.stroke();
+              ctx.strokeStyle='#2b3a52'; ctx.lineWidth=6+2*(lvl-1); ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
+              ctx.setLineDash([10,10]); ctx.strokeStyle='#f6f1a0'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke(); ctx.setLineDash([]);
             }
             function drawCity(c){
-              // halo
               const grd=ctx.createRadialGradient(c.x,c.y,2,c.x,c.y,22);
               grd.addColorStop(0,'rgba(255,255,255,.9)'); grd.addColorStop(1,'rgba(255,255,255,0)');
               ctx.fillStyle=grd; ctx.beginPath(); ctx.arc(c.x,c.y,22,0,Math.PI*2); ctx.fill();
               // pin
               ctx.fillStyle='#0e2b51'; ctx.strokeStyle='#0a83ff'; ctx.lineWidth=2.5;
               roundedRectPath(c.x-18,c.y-22,36,28,8); ctx.fill(); ctx.stroke();
-              // name badge
-              ctx.fillStyle='white'; ctx.font='12px 700 system-ui';
-              ctx.textAlign='center'; ctx.textBaseline='top';
+              // industries pictos
+              let y=c.y-36, x=c.x-6;
+              const keys=Object.keys(c.inds||{});
+              for(const k of keys.slice(0,3)){
+                ctx.fillStyle={farm:'#77e085',dairy:'#ffd54d',forest:'#b8865b',sawmill:'#9ad0ff'}[k]||'#ccc';
+                ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill(); x+=14;
+              }
+              // name
+              ctx.fillStyle='#fff'; ctx.font='12px 700 system-ui'; ctx.textAlign='center'; ctx.textBaseline='top';
               ctx.fillText(c.name, c.x, c.y+10);
-              // population chip
-              ctx.fillStyle='#1f6feb'; roundedRectPath(c.x-12,c.y-34,24,16,6); ctx.fill();
-              ctx.fillStyle='#fff'; ctx.font='10px 800 system-ui'; ctx.textBaseline='middle';
-              ctx.fillText(String(c.pop), c.x, c.y-26);
             }
             function drawBadges(){
-              // fake demand badges near roads
-              const badges=[{x:260,y:360,col:'#ffd54d',txt:'18'},
-                            {x:480,y:300,col:'#ff6f6f',txt:'26'},
-                            {x:640,y:420,col:'#77e085',txt:'12'}];
+              // demandes visuelles
+              const badges=[{x:260,y:360,col:'#ffd54d',txt:'Blé'},
+                            {x:480,y:300,col:'#9ad0ff',txt:'Planches'},
+                            {x:640,y:420,col:'#77e085',txt:'Lait'}];
               for(const b of badges){
-                ctx.save();
-                ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=8; ctx.shadowOffsetY=3;
-                ctx.fillStyle=b.col; ctx.beginPath(); ctx.arc(b.x,b.y,18,0,Math.PI*2); ctx.fill();
-                ctx.restore();
+                ctx.save(); ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=8; ctx.shadowOffsetY=3;
+                ctx.fillStyle=b.col; ctx.beginPath(); ctx.arc(b.x,b.y,18,0,Math.PI*2); ctx.fill(); ctx.restore();
                 ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(b.x,b.y,18,0,Math.PI*2); ctx.stroke();
-                ctx.fillStyle='#222'; ctx.font='12px 800 system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
+                ctx.fillStyle='#222'; ctx.font='11px 800 system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
                 ctx.fillText(b.txt,b.x,b.y+1);
               }
             }
-
             function draw(){
-              resize();
-              drawMap();
-              drawRoads();
+              resize(); drawMap();
+              for(const [a,b,l] of S.roads) drawRoad(a,b,l);
               for(const c of CITIES) drawCity(c);
               drawBadges();
+              // camions (points en mouvement)
+              ctx.fillStyle='#ffb32d';
+              for(const t of S.trucks){
+                const A=cityBy(t.from), B=cityBy(t.to);
+                const x=A.x + (B.x-A.x)*t.prog, y=A.y + (B.y-A.y)*t.prog;
+                ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
+              }
             }
 
-            // Tabs
+            // ==== Init ====
+            function mount(){
+              fillCities(); renderHUD(); renderFleet(); renderContracts(); draw();
+            }
             document.querySelectorAll('.tab').forEach(b=>{
               b.onclick=()=>{
                 document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
@@ -327,12 +487,10 @@ jobs:
               };
             });
 
-            // Buttons (stubs)
-            const br=$('buildRoad'), bt=$('buyTruck');
-            if(br) br.onclick=()=>alert('Route construite / améliorée (démo)');
-            if(bt) bt.onclick=()=>alert('Camion acheté (démo)');
+            // Première ouverture: s'assurer d'avoir des contrats
+            if(!S.jobs || !S.jobs.length) regenContracts();
 
-            document.addEventListener('DOMContentLoaded', ()=>{ fillCities(); draw(); });
+            document.addEventListener('DOMContentLoaded', mount);
           """), encoding="utf-8")
           PY
 
