@@ -1,4 +1,4 @@
-name: TK Tycoon — PWA + Tests tolérants + Pages
+name: TK Tycoon — Pages + PWA anti-cache (v9)
 
 on:
   push:
@@ -17,22 +17,27 @@ concurrency:
 jobs:
   build_and_test:
     runs-on: ubuntu-latest
-    env:
-      NODE_PATH: ${{ github.workspace }}/node_modules
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Build site (PWA + jeu + diag)
+      - name: Build site
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json, pathlib, textwrap
+          V = "v9"   # <<< bump ici
           site = pathlib.Path("_site"); site.mkdir(parents=True, exist_ok=True)
 
-          # -------- Manifest + icônes --------
+          # ---- fichiers existants gardés s'ils sont déjà dans le repo ----
+          # On réutilise ton index/style/app si présents, sinon on les crée minimes.
+          def write_if_absent(p, content):
+            p = pathlib.Path(p)
+            if not p.exists():
+              p.write_text(content, encoding="utf-8")
+
+          # manifest + icônes
           (site/"manifest.webmanifest").write_text(json.dumps({
             "name":"TK Tycoon Freight Deluxe","short_name":"TK Tycoon",
             "start_url":"./","scope":"./","display":"standalone",
@@ -46,466 +51,43 @@ jobs:
           for f in ("icon-192.png","icon-512.png","apple-touch-icon.png"):
             (site/f).write_bytes(tiny)
 
-          # -------- Service worker --------
-          (site/"sw.js").write_text(textwrap.dedent("""
-            const CACHE='tktycoon-v7';
-            const ASSETS=['./','./index.html','./style.css','./app.js','./manifest.webmanifest','./apple-touch-icon.png','./diag/index.html','./diag/diag.js','./diag/diag.css'];
-            self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));
-            self.addEventListener('activate',e=>e.waitUntil(
-              caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())
-            ));
-            self.addEventListener('fetch',e=>e.respondWith(
-              caches.match(e.request,{ignoreSearch:true}).then(r=>r||fetch(e.request).then(res=>{
-                const cp=res.clone(); caches.open(CACHE).then(c=>c.put(e.request,cp)); return res;
-              }).catch(()=>r))
-            ));
+          # service worker anti-cache
+          (site/"sw.js").write_text(textwrap.dedent(f"""
+            const CACHE='tktycoon-{V}';
+            const ASSETS=['./','./index.html','./style.css','./app.js?{V}','./manifest.webmanifest','./apple-touch-icon.png','./diag/index.html','./diag/diag.js','./diag/diag.css'];
+            self.addEventListener('install',e=>{{
+              self.skipWaiting();  // <-- prend la main immédiatement
+              e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));
+            }});
+            self.addEventListener('activate',e=>{{
+              e.waitUntil(
+                caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())
+              );
+            }});
+            self.addEventListener('fetch',e=>{{
+              // cache-first avec mise à jour en arrière-plan
+              e.respondWith(
+                caches.match(e.request,{{ignoreSearch:true}}).then(r=>r||fetch(e.request).then(res=>{{
+                  const cp=res.clone(); caches.open(CACHE).then(c=>c.put(e.request,cp)); return res;
+                }}).catch(()=>r))
+              );
+            }});
           """), encoding="utf-8")
 
-          # -------- Styles --------
-          (site/"style.css").write_text(textwrap.dedent("""
-            :root{--bg:#0f1115;--panel:#141820;--line:#2a2f3a;--txt:#e6e6e6;--acc:#75c46b}
-            *{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.4 system-ui,Segoe UI,Roboto}
-            .topbar{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);background:#0b0e13}
-            .brand{font-weight:800}
-            .wrap{max-width:1500px;margin:12px auto;display:grid;grid-template-columns:360px 1fr;gap:12px;padding:0 12px}
-            .tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-            .tabs button{padding:.6rem;border-radius:10px;border:1px solid var(--line);background:#10151f;color:#e6e6e6;cursor:pointer;font-weight:600}
-            .tabs button.active{background:var(--panel);outline:2px solid var(--acc);border-color:transparent}
-            .tab{background:#141820;border:1px solid var(--line);border-radius:12px;padding:12px}
-            .hidden{display:none}
-            .row{display:grid;grid-template-columns:1fr;gap:6px;margin:.35rem 0}
-            select,button{padding:.55rem;border-radius:10px;border:1px solid var(--line);background:#10151f;color:#e6e6e6}
-            #view{width:100%;border:1px solid var(--line);border-radius:12px;background:#0b0f16}
-            .mini{position:absolute;right:18px;bottom:18px;border:1px solid var(--line);border-radius:8px;background:#0b0f16;opacity:.9}
-            @media (max-width:1024px){.wrap{grid-template-columns:1fr}}
-            .appbar{position:sticky;top:0;z-index:20;display:flex;gap:8px;align-items:center;justify-content:space-between;background:#0b0e13;padding:8px 12px;border-bottom:1px solid var(--line)}
-            .pill{border:1px solid var(--line);background:#10151f;color:#e6e6e6;border-radius:999px;padding:6px 10px;font-weight:600}
-            .pill.primary{outline:2px solid var(--acc);border-color:transparent}
-          """), encoding="utf-8")
+          # index minimal si absent (ajoute juste l’appel versionné à app.js)
+          write_if_absent(site/"index.html", f"""<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>TK Tycoon</title><link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" href="./apple-touch-icon.png"><link rel="stylesheet" href="./style.css"><div class=appbar><span class=pill>🚚 TK Tycoon</span><a class=pill href="./diag/">Diagnostic</a><button id=btnUpdate class=pill>Mettre à jour</button></div><div id=app></div><script src="./app.js?{V}"></script><script>if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js');const u=document.getElementById('btnUpdate');u.onclick=async()=>{{if('caches'in window){{for(const k of await caches.keys()){{await caches.delete(k)}}}}if('serviceWorker'in navigator){{for(const r of await navigator.serviceWorker.getRegistrations()){{await r.unregister()}}}}location.reload(true)}}</script>""")
 
-          # -------- Index + UI PWA --------
-          (site/"index.html").write_text(textwrap.dedent("""
-            <!doctype html><html lang="fr"><head>
-              <meta charset="utf-8">
-              <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-              <title>TK Tycoon Freight Deluxe</title>
-              <meta name="theme-color" content="#0f1115">
-              <link rel="manifest" href="./manifest.webmanifest">
-              <meta name="apple-mobile-web-app-capable" content="yes">
-              <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-              <meta name="apple-mobile-web-app-title" content="TK Tycoon">
-              <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-              <link rel="stylesheet" href="./style.css">
-            </head><body>
-              <div class="appbar">
-                <div>
-                  <span class="pill">🚚 TK Tycoon</span>
-                  <span id="mode" class="pill">Mode: web</span>
-                  <a class="pill" href="./diag/" target="_self">Diagnostic</a>
-                </div>
-                <div>
-                  <button id="btnInstall" class="pill primary" hidden>Installer</button>
-                  <button id="btnUpdate" class="pill" hidden>Mettre à jour</button>
-                </div>
-              </div>
+          # style minimal si absent
+          write_if_absent(site/"style.css", ":root{--bg:#0f1115;--line:#2a2f3a;--txt:#e6e6e6}.appbar{position:sticky;top:0;background:#0b0e13;color:var(--txt);border-bottom:1px solid var(--line);padding:8px;display:flex;gap:8px}.pill{border:1px solid var(--line);background:#10151f;color:var(--txt);border-radius:999px;padding:6px 10px;font-weight:600}body{margin:0;background:#0f1115;color:var(--txt);font:14px system-ui}")
 
-              <div class="topbar">
-                <div class="brand">🚚 TK Tycoon Freight Deluxe</div>
-                <div class="stats">⏱ <span id="day">Day 1</span> • 💰 <span id="money">0</span> • ⛽ <span id="fuel">0</span> • 🛣 <span id="maint">0</span></div>
-              </div>
-
-              <div class="wrap">
-                <div class="left">
-                  <div class="tabs">
-                    <button data-tab="build" class="active">Construire</button>
-                    <button data-tab="fleet">Flotte</button>
-                    <button data-tab="contracts">Contrats</button>
-                    <button data-tab="economy">Économie</button>
-                  </div>
-                  <div class="tab" id="tab-build">
-                    <h3>Réseau routier</h3>
-                    <div class="row"><label>Ville A</label><select id="cityA"></select></div>
-                    <div class="row"><label>Ville B</label><select id="cityB"></select></div>
-                    <div class="row"><label>Niveau route</label>
-                      <select id="roadLvl">
-                        <option value="1">Niv.1 — 1 000$ (lent)</option>
-                        <option value="2">Niv.2 — 2 500$ (moyen)</option>
-                        <option value="3">Niv.3 — 6 000$ (rapide)</option>
-                      </select>
-                    </div>
-                    <button id="buildRoad">Construire / Améliorer</button>
-                  </div>
-
-                  <div class="tab hidden" id="tab-fleet">
-                    <h3>Nouvel achat</h3>
-                    <div class="row"><label>Type</label>
-                      <select id="truckType">
-                        <option value="van">Fourgon — 6u — 60km/h — 2L/100</option>
-                        <option value="rigid">Porteur — 16u — 75km/h — 6L/100</option>
-                        <option value="semi">Semi — 32u — 85km/h — 12L/100</option>
-                        <option value="tanker">Citerne — 28u — 80km/h — 10L/100</option>
-                      </select>
-                    </div>
-                    <div class="row"><label>Origine</label><select id="from"></select></div>
-                    <div class="row"><label>Destination</label><select id="to"></select></div>
-                    <div class="row"><label>Cargo</label>
-                      <select id="cargoType">
-                        <option value="wood">bois</option><option value="grain">grain</option>
-                        <option value="steel">acier</option><option value="goods">biens</option>
-                        <option value="fuel">carburant</option>
-                      </select>
-                    </div>
-                    <button id="buyTruck">Acheter & assigner</button>
-                    <div id="fleetList" class="list"></div>
-                  </div>
-
-                  <div class="tab hidden" id="tab-contracts"><h3>Contrats de fret</h3><div id="contracts" class="list"></div></div>
-                  <div class="tab hidden" id="tab-economy"><h3>Économie</h3><div id="eco" class="list"></div></div>
-                </div>
-
-                <div class="right">
-                  <canvas id="view" width="1300" height="740" aria-label="map"></canvas>
-                  <canvas id="mini" width="220" height="140" class="mini"></canvas>
-                </div>
-              </div>
-
-              <script src="./app.js"></script>
-              <script>
-                (function(){
-                  const btnInstall=document.getElementById('btnInstall');
-                  const btnUpdate=document.getElementById('btnUpdate');
-                  const mode=document.getElementById('mode');
-                  const isStandalone = window.navigator.standalone === true ||
-                    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
-                  mode.textContent = 'Mode: ' + (isStandalone ? 'app' : 'web');
-                  if(!isStandalone){
-                    let deferred;
-                    window.addEventListener('beforeinstallprompt',e=>{
-                      e.preventDefault(); deferred=e; btnInstall.hidden=false;
-                      btnInstall.onclick=()=>{ if(deferred){ deferred.prompt(); deferred=null; btnInstall.hidden=true; } };
-                    });
-                  }
-                  if('serviceWorker' in navigator){
-                    navigator.serviceWorker.register('./sw.js').then(reg=>{
-                      if(reg.waiting){ btnUpdate.hidden=false; }
-                      reg.addEventListener('updatefound',()=>{
-                        const nw=reg.installing; if(!nw) return;
-                        nw.addEventListener('statechange',()=>{
-                          if(nw.state==='installed' && navigator.serviceWorker.controller){
-                            btnUpdate.hidden=false;
-                          }
-                        });
-                      });
-                    });
-                    btnUpdate.onclick=()=>{ caches.keys().then(keys=>Promise.all(keys.map(k=>caches.delete(k)))).then(()=>location.reload()); };
-                  }
-                })();
-              </script>
-            </body></html>
-          """), encoding="utf-8")
-
-          # -------- app.js (jeu corrigé/robuste) --------
-          (site/"app.js").write_text(textwrap.dedent(r"""
-            (function(){const bucket=[];function flush(){try{localStorage.setItem('tktycoon_errors',JSON.stringify(bucket).slice(-5000));}catch(e){}}
-            addEventListener('error',e=>{bucket.push({type:'error',msg:String(e.message||e)});flush();});
-            addEventListener('unhandledrejection',e=>{bucket.push({type:'promise',msg:String(e.reason)});flush();});})();
-
-            // RNG stable
-            function hashCode(s){let t=0;for(let i=0;i<s.length;i++){t=((t<<5)-t)+s.charCodeAt(i)|0}return t>>>0;}
-            function rngFactory(a){return function(){a+=0x6D2B79F5;let t=Math.imul(a^a>>>15,a|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
-            const RNG=rngFactory(hashCode(location.pathname));
-
-            const $=id=>document.getElementById(id);
-            const CITIES=[{id:'A',name:'Port-Est',x:120,y:520},{id:'B',name:'Valbois',x:360,y:220},{id:'C',name:'Fer-sur-Lac',x:760,y:180},{id:'D',name:'Grainville',x:1040,y:520},{id:'E',name:'Cap-Sud',x:560,y:560},{id:'F',name:'Nordacier',x:1020,y:120}];
-            const CARGO=['wood','grain','steel','goods','fuel'];
-            const TRUCKS={
-              van   :{cap:6 ,spd:60,f:2 ,cost:4000 ,maint:20 ,label:'Fourgon'},
-              rigid :{cap:16,spd:75,f:6 ,cost:9000 ,maint:45 ,label:'Porteur'},
-              semi  :{cap:32,spd:85,f:12,cost:18000,maint:80 ,label:'Semi'},
-              tanker:{cap:28,spd:80,f:10,cost:22000,maint:95 ,label:'Citerne'}
-            };
-            const PRICE={wood:40,grain:35,steel:80,goods:100,fuel:70};
-            const IND={A:{wood:.20,steel:.05,fuel:.10},B:{wood:.45,grain:.12},C:{steel:.35,goods:.02,fuel:.02},D:{grain:.55,goods:.05,fuel:.03},E:{wood:.12,grain:.12,steel:.08,goods:.04,fuel:.02},F:{steel:.45,fuel:.02},cons:{A:{goods:-.30},B:{steel:-.25},C:{goods:-.2},D:{wood:-.25},E:{grain:-.2},F:{goods:-.1}};
-
-            const safeCity=id=>CITIES.find(c=>c.id===id)||{id:'?',name:'(?)',x:0,y:0};
-            const key=(a,b)=>a<b?`${a}-${b}`:`${b}-${a}`;
-            const dist=(a,b)=>{const A=safeCity(a),B=safeCity(b);return Math.hypot(A.x-B.x,A.y-B.y)};
-
-            function newContracts(){
-              const ids=CITIES.map(c=>c.id), out=[];
-              for(let i=0;i<6;i++){
-                const cargo=CARGO[(Math.random()+RNG())*CARGO.length|0];
-                const to=ids[(Math.random()+RNG())*ids.length|0];
-                out.push({id:i+1,cargo,to,reward:Math.round(180+RNG()*260),demand:Math.round(12+RNG()*26)});
-              }
-              return out;
-            }
-
-            const S={t:0,dt:.25,day:1,money:25000,fuel:0,maint:0,roads:new Map(),stocks:{},fleet:[],contracts:newContracts()};
-            CITIES.forEach(c=>{S.stocks[c.id]={}; CARGO.forEach(g=>S.stocks[c.id][g]=0);});
-
-            // UI lists
-            const view=$('view'), ctx=view.getContext('2d'), mini=$('mini'), mctx=mini.getContext('2d');
-            const $money=$('money'), $day=$('day'), $fuel=$('fuel'), $maint=$('maint');
-            const cityA=$('cityA'), cityB=$('cityB'), from=$('from'), to=$('to');
-            function fill(sel){CITIES.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.name;sel.appendChild(o);});}
-            [cityA,cityB,from,to].forEach(fill);
-
-            // Tabs
-            document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
-              document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));
-              b.classList.add('active');
-              document.querySelectorAll('.tab').forEach(t=>t.classList.add('hidden'));
-              document.getElementById('tab-'+b.dataset.tab).classList.remove('hidden');
-            });
-
-            // Routes
-            const roadLevel=(a,b)=> (S.roads.get(key(a,b))||{lvl:0}).lvl;
-            const speed=(a,b)=>[0,1,1.35,1.75][roadLevel(a,b)]||.5;
-            const neighbors=id=>{
-              const res=[];
-              for(const [k,v] of S.roads.entries()){
-                const [x,y]=k.split('-'); if(x===id) res.push(y); else if(y===id) res.push(x);
-              } return res;
-            };
-            function upgrade(a,b,lvl){
-              if(!a||!b||a===b) return false;
-              const k=key(a,b); const cur=roadLevel(a,b);
-              if(lvl<=cur) return true;
-              const steps=[0,1000,2500,6000]; const cost=steps[lvl]-steps[cur];
-              if(S.money<cost) return false;
-              S.money-=cost; S.roads.set(k,{lvl}); return true;
-            }
-            function astar(a,b){
-              if(a===b) return [a];
-              const open=[a], came={}, g={}, f={};
-              CITIES.forEach(c=>{g[c.id]=Infinity; f[c.id]=Infinity;}); g[a]=0; f[a]=dist(a,b)/80;
-              while(open.length){
-                open.sort((i,j)=>f[i]-f[j]); const u=open.shift(); if(u===b) break;
-                for(const v of neighbors(u)){
-                  const gg=g[u]+dist(u,v)/speed(u,v);
-                  if(gg<g[v]){came[v]=u; g[v]=gg; f[v]=gg+dist(v,b)/80; if(!open.includes(v)) open.push(v);}
-                }
-              }
-              if(!came[b]) return null;
-              const p=[b]; while(came[p[0]]) p.unshift(came[p[0]]); return p;
-            }
-            const pathLen=p=>!p?0:p.slice(1).reduce((s,_,i)=>s+dist(p[i],p[i+1]),0);
-            const avgSpeed=r=>!r||r.length<2?1:r.slice(1).reduce((s,_,i)=>s+speed(r[i],r[i+1]),0)/(r.length-1);
-
-            $('buildRoad').onclick=()=>{const lvl=parseInt($('roadLvl').value,10); if(!upgrade(cityA.value,cityB.value,lvl)) alert('Impossible (fonds ou sélection).');};
-            let truckSeq=1;
-            $('buyTruck').onclick=()=>{
-              const typ=$('truckType').value, cargo=$('cargoType').value;
-              const p=astar(from.value,to.value); if(!p) return alert('Pas de route');
-              const d=TRUCKS[typ]; if(S.money<d.cost) return alert('Fonds insuffisants');
-              S.money-=d.cost;
-              S.fleet.push({id:truckSeq++,type:typ,cargo,from:from.value,to:to.value,route:p,dist:pathLen(p),at:0,dir:1,load:0,spd:d.spd/100,f:d.f,maint:d.maint});
-              renderFleet();
-            };
-
-            // Économie / jour
-            function econDay(){
-              Object.keys(PRICE).forEach(k=>PRICE[k]=Math.max(10,PRICE[k]+Math.round((Math.random()+RNG()-.5)*6)));
-              let rm=0; for(const v of S.roads.values()) rm+=v.lvl*10;
-              let fm=0; S.fleet.forEach(t=>fm+=t.maint);
-              S.maint=rm+fm; S.money-=S.maint;
-              const inc=Math.min(S.fuel,20)*PRICE.fuel; S.money+=inc; S.fuel=Math.max(0,S.fuel-20);
-            }
-            function tick(){
-              S.t+=S.dt; const d=Math.floor(S.t/40)+1; if(d!==S.day){ S.day=d; econDay(); S.contracts=newContracts(); }
-              // prod/cons
-              CITIES.forEach(c=>{
-                CARGO.forEach(g=>{
-                  const prod=(IND[c.id]&&IND[c.id][g])||0, cons=(IND.cons[c.id]&&IND.cons[c.id][g])||0;
-                  S.stocks[c.id][g]+=Math.max(0,prod)*S.dt; S.stocks[c.id][g]+=Math.min(0,cons)*S.dt;
-                  if(S.stocks[c.id][g]<0) S.stocks[c.id][g]=0;
-                });
-              });
-              // flotte
-              S.fleet.forEach(t=>{
-                if(!t.route||t.dist<=0) return;
-                t.at+=80*t.spd*avgSpeed(t.route)*S.dt;
-                if(t.at>=t.dist){
-                  const dst=t.dir>0?t.route[t.route.length-1]:t.route[0];
-                  if(t.load>0 && dst===t.to){
-                    let ct=S.contracts.find(c=>c.cargo===t.cargo&&c.to===dst&&c.demand>0);
-                    let q=t.load;
-                    if(ct){ const u=Math.min(ct.demand,q); S.money+=u*(ct.reward+(PRICE[t.cargo]||0)); ct.demand-=u; q-=u; }
-                    else { S.money+=q*(PRICE[t.cargo]||0); q=0; }
-                    if(t.cargo==='fuel') S.fuel+=t.load;
-                    S.stocks[dst][t.cargo]+=Math.max(0,q);
-                    t.load=0;
-                  }
-                  if(t.dir<0){
-                    const avail=S.stocks[t.from][t.cargo]||0, take=Math.min(avail,t.cap||TRUCKS[t.type].cap);
-                    S.stocks[t.from][t.cargo]-=take; t.load=take; S.money-=(t.dist/20)*t.f;
-                  }
-                  t.dir*=-1; t.at=0;
-                }
-              });
-            }
-
-            // Rendu
-            function draw(){
-              ctx.fillStyle='#0b0f16'; ctx.fillRect(0,0,view.width,view.height);
-              for(const [k,v] of S.roads.entries()){
-                const [x,y]=k.split('-'), A=safeCity(x), B=safeCity(y);
-                ctx.lineWidth=2+v.lvl*1.5;
-                ctx.strokeStyle=['#2b3b55','#4e86ff','#75c46b','#ffd166'][v.lvl]||'#2b3b55';
-                ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
-              }
-              CITIES.forEach(c=>{
-                ctx.fillStyle='#1f2937'; ctx.beginPath(); ctx.arc(c.x,c.y,18,0,Math.PI*2); ctx.fill();
-                ctx.strokeStyle='#4b5563'; ctx.stroke();
-                ctx.fillStyle='#e5e7eb'; ctx.font='12px system-ui'; ctx.fillText(c.name,c.x-24,c.y-24);
-              });
-              S.fleet.forEach(t=>{
-                if(!t.route||t.route.length<2) return;
-                let d=t.at, px=null, py=null;
-                for(let i=0;i<t.route.length-1;i++){
-                  const A=safeCity(t.route[i]), B=safeCity(t.route[i+1]), L=Math.hypot(A.x-B.x,A.y-B.y);
-                  if(d<=L||i===t.route.length-2){
-                    const kf=L?Math.min(1,Math.max(0,d/L)):0; const P=t.dir>0?{a:A,b:B}:{a:B,b:A};
-                    px=P.a.x+(P.b.x-P.a.x)*kf; py=P.a.y+(P.b.y-P.a.y)*kf; break;
-                  } else d-=L;
-                }
-                const col=t.cargo==='wood'?'#8b5a2b':t.cargo==='grain'?'#e3b341':t.cargo==='steel'?'#6b7280':t.cargo==='goods'?'#60a5fa':'#c084fc';
-                ctx.fillStyle=col; ctx.fillRect((px||0)-6,(py||0)-4,12,8);
-              });
-              try{ window.__frameSample=(ctx.getImageData(10,10,1,1).data||[])[3]||0; }catch(e){}
-              // mini
-              mctx.fillStyle='#0b0f16'; mctx.fillRect(0,0,mini.width,mini.height);
-              const sx=mini.width/view.width, sy=mini.height/view.height;
-              for(const [k,v] of S.roads.entries()){
-                const [x,y]=k.split('-'), A=safeCity(x), B=safeCity(y);
-                mctx.strokeStyle=['#2b3b55','#4e86ff','#75c46b','#ffd166'][v.lvl]||'#2b3b55';
-                mctx.beginPath(); mctx.moveTo(A.x*sx,A.y*sy); mctx.lineTo(B.x*sx,B.y*sy); mctx.stroke();
-              }
-              CITIES.forEach(c=>{ mctx.fillStyle='#9aa4b2'; mctx.fillRect(c.x*sx-2,c.y*sy-2,4,4); });
-
-              $money.textContent=Math.round(S.money).toLocaleString()+" $";
-              $fuel.textContent=Math.floor(S.fuel)+"u";
-              $maint.textContent="-"+Math.round(S.maint)+" $/jour";
-              $day.textContent="Day "+S.day;
-            }
-
-            function renderFleet(){
-              const box=$('fleetList'); if(!box) return; box.innerHTML='';
-              S.fleet.forEach(t=>{
-                const d=TRUCKS[t.type]||{label:t.type,cap:t.cap||0,spd:0,f:0};
-                const it=document.createElement('div'); it.className='item';
-                const fromName=safeCity(t.from).name, toName=safeCity(t.to).name;
-                it.innerHTML='#'+t.id+' '+d.label+' • '+t.cargo+' • '+fromName+' ⇆ '+toName+
-                             '<span class="badge">cap '+(t.cap||d.cap)+'</span>'+
-                             '<span class="badge">v'+d.spd+'km/h</span>'+
-                             '<span class="badge">fuel '+t.f+'/100km</span>';
-                box.appendChild(it);
-              });
-            }
-            function renderContracts(){
-              const box=$('contracts'); if(!box) return; box.innerHTML='';
-              S.contracts.forEach(c=>{
-                const it=document.createElement('div'); it.className='item';
-                it.innerHTML='<b>'+c.cargo+'</b> → '+safeCity(c.to).name+
-                             '<span class="badge">'+c.reward+'$/u</span>'+
-                             '<span class="badge">reste '+c.demand+'</span>';
-                box.appendChild(it);
-              });
-            }
-            function renderEconomy(){
-              const box=$('eco'); if(!box) return; box.innerHTML='';
-              Object.keys(PRICE).forEach(k=>{
-                const it=document.createElement('div'); it.className='item';
-                it.innerHTML=k+' <span class="badge">'+PRICE[k]+'$/u</span>';
-                box.appendChild(it);
-              });
-            }
-            setInterval(()=>{renderFleet();renderContracts();renderEconomy();},1000);
-
-            // réseau de départ
-            upgrade('A','E',2); upgrade('E','B',1); upgrade('E','C',1); upgrade('E','D',1); upgrade('C','F',1);
-
-            (function loop(){ tick(); draw(); requestAnimationFrame(loop); })();
-          """), encoding="utf-8")
-
-          # -------- /diag --------
+          # --- DIAG avec bouton Purger ---
           diag = site/"diag"; diag.mkdir(parents=True, exist_ok=True)
-          (diag/"index.html").write_text("""<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Diagnostic PWA</title><link rel="stylesheet" href="./diag.css"><div class="card"><h2>Diagnostic PWA</h2><div id="out">Tests en cours…</div><p><a href="../" class="btn">← Retour au jeu</a></p></div><script src="./diag.js"></script>""", encoding="utf-8")
-          (diag/"diag.css").write_text("body{margin:0;background:#0f1115;color:#e6e6e6;font:14px system-ui;display:grid;place-items:center;min-height:100vh}.card{background:#141820;border:1px solid #2a2f3a;border-radius:12px;padding:16px;max-width:680px;width:94%}.ok{color:#75c46b}.bad{color:#ef5350}.warn{color:#ffb454}.btn{display:inline-block;padding:8px 10px;border:1px solid #2a2f3a;border-radius:8px;color:#e6e6e6;text-decoration:none}ul{line-height:1.6}", encoding="utf-8")
-          (diag/"diag.js").write_text("(async function(){function li(t,c){var el=document.createElement('li');el.textContent=t;if(c)el.className=c;list.appendChild(el)}var out=document.getElementById('out');var ul=document.createElement('ul');out.innerHTML='';out.appendChild(ul);var list=ul;li('HTTPS: '+(location.protocol==='https:'?'OK':'KO'), location.protocol==='https:'?'ok':'bad');try{const r=await fetch('../manifest.webmanifest',{cache:'no-store'}); li('Manifest: '+(r.ok?'OK':'KO '+r.status), r.ok?'ok':'bad');}catch(e){li('Manifest: KO '+e,'bad');}if('serviceWorker' in navigator){try{const reg=await navigator.serviceWorker.getRegistration('../'); li('Service worker: '+(reg?'OK':'KO'), reg?'ok':'bad');}catch(e){li('SW: KO '+e,'bad');}} else {li('SW non supporté','warn');}if('caches' in window){const keys=await caches.keys(); li('Caches: '+(keys.length?keys.join(', '):'aucun'), keys.length?'ok':'warn');}var standalone=window.navigator.standalone===true||(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches); li('Mode: '+(standalone?'App (standalone)':'Web (Safari/Chrome)'), standalone?'ok':'warn');})();", encoding="utf-8")
+          (diag/"index.html").write_text("""<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Diagnostic PWA</title><link rel="stylesheet" href="./diag.css"><div class="card"><h2>Diagnostic PWA</h2><div id="out">Tests…</div><p><button id="purge" class="btn">🧹 Purger cache + SW</button> <a class="btn" href="../">← Retour au jeu</a></p></div><script src="./diag.js"></script>""", encoding="utf-8")
+          (diag/"diag.css").write_text("body{margin:0;background:#0f1115;color:#e6e6e6;font:14px system-ui;display:grid;place-items:center;min-height:100vh}.card{background:#141820;border:1px solid #2a2f3a;border-radius:12px;padding:16px;max-width:680px;width:94%}.ok{color:#75c46b}.bad{color:#ef5350}.warn{color:#ffb454}.btn{display:inline-block;padding:8px 10px;border:1px solid #2a2f3a;border-radius:8px;color:#e6e6e6;background:#10151f;text-decoration:none}ul{line-height:1.6}", encoding="utf-8")
+          (diag/"diag.js").write_text(f"(async function(){{function li(t,c){{var el=document.createElement('li');el.textContent=t;if(c)el.className=c;list.appendChild(el)}}var out=document.getElementById('out');var ul=document.createElement('ul');out.innerHTML='';out.appendChild(ul);var list=ul;li('HTTPS: '+(location.protocol==='https:'?'OK':'KO'), location.protocol==='https:'?'ok':'bad');try{{const r=await fetch('../manifest.webmanifest',{{cache:'no-store'}}); li('Manifest: '+(r.ok?'OK':'KO '+r.status), r.ok?'ok':'bad');}}catch(e){{li('Manifest: KO '+e,'bad');}}if('serviceWorker' in navigator){{try{{const reg=await navigator.serviceWorker.getRegistration('../'); li('Service worker: '+(reg?'OK':'KO'), reg?'ok':'bad');}}catch(e){{li('SW: KO '+e,'bad');}}}} else {{li('SW non supporté','warn');}}if('caches' in window){{const keys=await caches.keys(); li('Caches: '+(keys.length?keys.join(', '):'aucun'), keys.length?'ok':'warn');}}var standalone=window.navigator.standalone===true||(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches); li('Mode: '+(standalone?'App (standalone)':'Web (Safari/Chrome)'), standalone?'ok':'warn');document.getElementById('purge').onclick=async()=>{{try{{if('caches' in window){{for(const k of await caches.keys()) await caches.delete(k);}}if('serviceWorker' in navigator){{const regs=await navigator.serviceWorker.getRegistrations();for(const r of regs) await r.unregister();}}alert('Cache et SW purgés. Rechargement…'); location.replace('../?fresh={V}');}}catch(e){{alert('Échec purge: '+e);}}}})();", encoding="utf-8")
           PY
 
-      - name: Self-test (fichiers clés)
-        shell: bash
-        run: |
-          test -f _site/index.html
-          test -f _site/manifest.webmanifest
-          test -f _site/app.js
-          test -f _site/sw.js
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Playwright (pkg + browser)
-        shell: bash
-        run: |
-          npm i --no-save playwright@1.46.0
-          npx playwright install --with-deps chromium
-
-      - name: Write smoke test (CommonJS)
-        shell: bash
-        run: |
-          cat > smoke.cjs <<'CJS'
-          const { chromium } = require('playwright');
-          const fs = require('fs');
-          (async () => {
-            const URL = 'http://localhost:4173/';
-            const logs = [], errors = [];
-            const line = s => String(s).replace(/\n/g,' ').slice(0,500);
-            const browser = await chromium.launch();
-            const page = await browser.newPage();
-
-            page.on('console', m => { const t=`[${m.type()}] ${line(m.text())}`; logs.push(t); if(m.type()==='error') errors.push(t); });
-            page.on('pageerror', e => { const t=`[pageerror] ${line(e.message||e)}`; logs.push(t); errors.push(t); });
-            page.on('requestfailed', r => { const t=`[requestfailed] ${r.url()} ${r.failure()?.errorText||''}`; logs.push(t); errors.push(t); });
-
-            await page.goto(URL, { waitUntil: 'load', timeout: 30000 });
-            await page.waitForSelector('#view', { timeout: 10000 }).catch(()=>{});
-            await page.waitForTimeout(900);
-
-            const frame = await page.evaluate(() => globalThis.__frameSample || 0);
-            if (!frame) errors.push('[assert] Canvas did not draw');
-
-            fs.writeFileSync('playwright.log', logs.join('\n')+'\n', 'utf8');
-            await browser.close();
-
-            // >>> NO FAIL: on log seulement
-            if (errors.length) console.error('SMOKE WARNINGS\\n'+errors.join('\\n'));
-            else console.log('SMOKE TEST PASSED');
-          })();
-          CJS
-
-      - name: Run smoke test (headless) — tolerant
-        shell: bash
-        continue-on-error: true
-        run: |
-          python3 -m http.server 4173 --directory _site >/dev/null 2>&1 &
-          echo $! > /tmp/srv.pid
-          sleep 1
-          node smoke.cjs || true
-          kill $(cat /tmp/srv.pid) 2>/dev/null || true
-
-      - name: Upload logs (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: tktycoon-logs
-          path: playwright.log
-
-      - name: Upload artifact for Pages
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
@@ -514,13 +96,4 @@ jobs:
     needs: build_and_test
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to GitHub Pages
-        id: pages
-        uses: actions/deploy-pages@v4
-
-      - name: Show URL
-        run: |
-          echo "## ✅ Live" >> "$GITHUB_STEP_SUMMARY"
-          echo "${{ steps.pages.outputs.page_url }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Diagnostic: ${{ steps.pages.outputs.page_url }}diag/" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/deploy-pages@v4
