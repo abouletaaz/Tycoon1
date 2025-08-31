@@ -1,4 +1,4 @@
-name: TK Tycoon — reset propre (v10)
+name: TK Tycoon — Skin cartoon (v12)
 
 on:
   push:
@@ -20,125 +20,111 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Génère le site (PWA + app robuste)
+      - name: Build site (PWA + cartoon UI)
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json, pathlib, textwrap
-          VER = "v10"  # bump cache et cache-busting
-          out = pathlib.Path("_site"); out.mkdir(parents=True, exist_ok=True)
+          VER="v12"
+          out=pathlib.Path("_site"); out.mkdir(parents=True, exist_ok=True)
 
-          # -------- Manifest + icônes --------
+          # Manifest + icônes min
           (out/"manifest.webmanifest").write_text(json.dumps({
-              "name":"TK Tycoon Freight Deluxe",
-              "short_name":"TK Tycoon",
-              "start_url":"./",
-              "scope":"./",
-              "display":"standalone",
-              "background_color":"#0f1115",
-              "theme_color":"#0f1115",
-              "icons":[
-                {"src":"icon-192.png","sizes":"192x192","type":"image/png"},
-                {"src":"icon-512.png","sizes":"512x512","type":"image/png"}
-              ]
+            "name":"TK Tycoon Freight Deluxe",
+            "short_name":"TK Tycoon",
+            "start_url":"./",
+            "scope":"./",
+            "display":"standalone",
+            "background_color":"#0b2942",
+            "theme_color":"#1f6feb",
+            "icons":[
+              {"src":"icon-192.png","sizes":"192x192","type":"image/png"},
+              {"src":"icon-512.png","sizes":"512x512","type":"image/png"}
+            ]
           }, indent=2), encoding="utf-8")
-
-          tiny = bytes.fromhex(
-            "89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C489"
-            "0000000A49444154789C6360000002000154010A9B0000000049454E44AE426082"
-          )
+          tiny=bytes.fromhex("89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C4890000000A49444154789C6360000002000154010A9B0000000049454E44AE426082")
           for f in ("icon-192.png","icon-512.png","apple-touch-icon.png"):
             (out/f).write_bytes(tiny)
 
-          # -------- Service worker (anti-cache agressif) --------
+          # SW agressif + cache-bust
           (out/"sw.js").write_text(textwrap.dedent(f"""
-            const CACHE = 'tktycoon-{VER}';
-            const ASSETS = [
-              './','./index.html','./style.css','./app.js?{VER}',
-              './manifest.webmanifest','./apple-touch-icon.png'
-            ];
-            self.addEventListener('install', e => {{
-              self.skipWaiting();
-              e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
-            }});
-            self.addEventListener('activate', e => {{
-              e.waitUntil(
-                caches.keys().then(keys =>
-                  Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-                ).then(() => self.clients.claim())
-              );
-            }});
-            self.addEventListener('fetch', e => {{
-              e.respondWith(
-                caches.match(e.request, {{ ignoreSearch:true }})
-                  .then(r => r || fetch(e.request).then(res => {{
-                    const cp = res.clone();
-                    caches.open(CACHE).then(c => c.put(e.request, cp));
-                    return res;
-                  }}).catch(() => r))
-              );
-            }});
+            const CACHE='tktycoon-{VER}';
+            const ASSETS=['./','./index.html','./style.css','./app.js?{VER}','./manifest.webmanifest','./apple-touch-icon.png'];
+            self.addEventListener('install',e=>{{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));}});
+            self.addEventListener('activate',e=>{{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE).map(x=>caches.delete(x)))).then(()=>self.clients.claim()));}});
+            self.addEventListener('fetch',e=>{{e.respondWith(caches.match(e.request,{{ignoreSearch:true}}).then(r=>r||fetch(e.request).then(res=>{{const cp=res.clone();caches.open(CACHE).then(c=>c.put(e.request,cp));return res;}}).catch(()=>r)));}});
           """), encoding="utf-8")
 
-          # -------- Styles --------
+          # Style cartoon (bleu/vert, glossy, badges)
           (out/"style.css").write_text(textwrap.dedent("""
-            :root{--bg:#0f1115;--panel:#141820;--line:#2a2f3a;--txt:#e6e6e6;--acc:#75c46b}
+            :root{
+              --blue:#1f6feb; --blue2:#3489ff; --blue3:#0b2942;
+              --green:#79d35e; --green2:#baf57f; --land:#5fb35a;
+              --panel:#101827; --line:#22304a; --txt:#f2f6ff; --mut:#99a7c2; --accent:#ffd54d;
+            }
             *{box-sizing:border-box} html,body{height:100%}
-            body{margin:0;background:var(--bg);color:var(--txt);font:14px system-ui,Segoe UI,Roboto}
-            .bar{position:sticky;top:0;z-index:10;display:flex;gap:8px;align-items:center;justify-content:space-between;background:#0b0e13;padding:8px 12px;border-bottom:1px solid var(--line)}
-            .pill{border:1px solid var(--line);background:#10151f;color:var(--txt);border-radius:999px;padding:6px 10px;font-weight:600}
-            .wrap{max-width:1200px;margin:12px auto;padding:0 12px;display:grid;grid-template-columns:380px 1fr;gap:12px}
+            body{margin:0;background:linear-gradient(180deg,#0b1526,#0e1b30 60%,#0b1526);color:var(--txt);font:14px system-ui,Segoe UI,Roboto}
+            .appbar{position:sticky;top:0;z-index:20;padding:8px 12px;border-bottom:1px solid #0e2542;
+              background:linear-gradient(180deg,#0a2b57,#092446);display:flex;justify-content:space-between;align-items:center}
+            .brand{display:flex;gap:8px;align-items:center}
+            .badge{background:linear-gradient(180deg,var(--blue2),var(--blue));border:1px solid #0d3a7a;color:#fff;padding:6px 10px;border-radius:999px;font-weight:800;letter-spacing:.2px;box-shadow:0 2px 0 #0b2b5a}
+            .btn{border:0;background:linear-gradient(180deg,#ffd86b,#ffb32d);color:#422e02;border-radius:12px;padding:8px 12px;font-weight:800;box-shadow:0 3px 0 #b57a11}
+            .btn.secondary{background:linear-gradient(180deg,#2ed77c,#18b85f);box-shadow:0 3px 0 #0a6d36;color:#061a0f}
+            .wrap{max-width:1280px;margin:12px auto;padding:0 12px;display:grid;grid-template-columns:380px 1fr;gap:12px}
             @media(max-width:980px){.wrap{grid-template-columns:1fr}}
-            .tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
-            .tabs button{padding:.6rem;border-radius:10px;border:1px solid var(--line);background:#10151f;color:#e6e6e6;cursor:pointer;font-weight:600}
-            .tabs button.active{background:var(--panel);outline:2px solid var(--acc);border-color:transparent}
-            .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
-            .row{display:grid;gap:6px;margin:.35rem 0}
-            select,button{padding:.55rem;border-radius:10px;border:1px solid var(--line);background:#10151f;color:#e6e6e6}
-            canvas{width:100%;border:1px solid var(--line);background:#0b0f16;border-radius:12px}
-            #err{position:fixed;left:8px;bottom:8px;right:8px;max-height:34vh;overflow:auto;background:#2b1e1e;border:1px solid #5a2c2c;color:#ffd6d6;padding:8px;border-radius:10px;font:12px ui-monospace,Menlo,monospace;display:none;white-space:pre-wrap}
+            .panel{background:linear-gradient(180deg,#111b2c,#0f1726);border:1px solid var(--line);border-radius:16px;box-shadow:0 6px 18px rgba(0,0,0,.35);padding:12px}
+            .tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+            .tab{border-radius:12px;border:1px solid #193056;background:linear-gradient(180deg,#12213c,#0e1b30);color:#e7efff;padding:.6rem;font-weight:800}
+            .tab.active{outline:3px solid #2e8bff;box-shadow:0 4px 0 #0e3f8e}
+            label{font-weight:700;color:#cfe1ff}
+            select,button{width:100%;padding:.65rem;border-radius:12px;border:1px solid #1f304f;background:#0f1a2e;color:#eaf1ff}
+            .row{display:grid;gap:6px;margin:.45rem 0}
+            #view{width:100%;height:56vh;display:block;border-radius:16px;border:2px solid #16335f;background:#072034;box-shadow:inset 0 0 0 1px #0b274a}
+            .statbar{display:flex;gap:8px;align-items:center}
+            .stat{display:flex;gap:6px;align-items:center;background:#0c1a2f;border:1px solid #16335f;border-radius:12px;padding:6px 10px}
+            .dot{width:10px;height:10px;border-radius:999px}
+            .dot.gold{background:#ffd54d}.dot.fuel{background:#ff6f6f}.dot.road{background:#77e085}
+            #err{position:fixed;left:8px;bottom:8px;right:8px;max-height:34vh;overflow:auto;background:#331b1b;border:1px solid #5a2c2c;color:#ffd6d6;padding:8px;border-radius:12px;font:12px ui-monospace,Menlo,monospace;display:none;white-space:pre-wrap}
             #err.show{display:block}
           """), encoding="utf-8")
 
-          # -------- HTML --------
+          # HTML
           (out/"index.html").write_text(textwrap.dedent(f"""
-            <!doctype html>
-            <html lang="fr">
-            <head>
-              <meta charset="utf-8">
-              <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+            <!doctype html><html lang="fr"><head>
+              <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
               <title>TK Tycoon Freight Deluxe</title>
-              <meta name="theme-color" content="#0f1115">
+              <meta name="theme-color" content="#1f6feb">
               <link rel="manifest" href="./manifest.webmanifest">
-              <meta name="apple-mobile-web-app-capable" content="yes">
-              <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-              <meta name="apple-mobile-web-app-title" content="TK Tycoon">
+              <meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
               <link rel="apple-touch-icon" href="./apple-touch-icon.png">
               <link rel="stylesheet" href="./style.css">
-            </head>
-            <body>
-              <div class="bar">
-                <div>
-                  <span class="pill">🚚 TK Tycoon</span>
-                  <span id="mode" class="pill">Mode: web</span>
+            </head><body>
+              <div class="appbar">
+                <div class="brand">
+                  <span class="badge">🚚 TK Tycoon</span>
+                  <div class="statbar">
+                    <span class="stat"><span class="dot gold"></span><b id="money">0</b></span>
+                    <span class="stat"><span class="dot fuel"></span><b id="fuel">0</b></span>
+                    <span class="stat"><span class="dot road"></span><b id="maint">0</b></span>
+                  </div>
                 </div>
                 <div>
-                  <button id="btnInstall" class="pill" hidden>Installer</button>
-                  <button id="btnUpdate" class="pill">Mettre à jour</button>
+                  <button id="btnInstall" class="btn secondary" hidden>Installer</button>
+                  <button id="btnUpdate" class="btn">Mettre à jour</button>
                 </div>
               </div>
 
               <div class="wrap">
-                <div>
-                  <div class="tabs">
-                    <button class="active" data-tab="build">Construire</button>
-                    <button data-tab="fleet">Flotte</button>
-                    <button data-tab="contracts">Contrats</button>
-                    <button data-tab="eco">Économie</button>
+                <div class="panel">
+                  <div style="display:flex;gap:8px;margin-bottom:8px">
+                    <button class="tab active" data-tab="build">Construire</button>
+                    <button class="tab" data-tab="fleet">Flotte</button>
+                    <button class="tab" data-tab="contracts">Contrats</button>
+                    <button class="tab" data-tab="eco">Économie</button>
                   </div>
 
-                  <div class="card" id="tab-build">
+                  <div id="tab-build">
                     <h3>Réseau routier</h3>
                     <div class="row"><label>Ville A</label><select id="cityA"></select></div>
                     <div class="row"><label>Ville B</label><select id="cityB"></select></div>
@@ -149,10 +135,10 @@ jobs:
                         <option value="3">Niv.3 — 6 000$ (rapide)</option>
                       </select>
                     </div>
-                    <button id="buildRoad">Construire / Améliorer</button>
+                    <button id="buildRoad" class="btn secondary">Construire / Améliorer</button>
                   </div>
 
-                  <div class="card" id="tab-fleet" hidden>
+                  <div id="tab-fleet" hidden>
                     <h3>Flotte</h3>
                     <div class="row"><label>Origine</label><select id="from"></select></div>
                     <div class="row"><label>Destination</label><select id="to"></select></div>
@@ -163,16 +149,16 @@ jobs:
                         <option value="semi">Semi</option>
                       </select>
                     </div>
-                    <button id="buyTruck">Acheter & assigner</button>
-                    <div id="fleetList"></div>
+                    <button id="buyTruck" class="btn secondary">Acheter & assigner</button>
+                    <div id="fleetList" style="margin-top:8px"></div>
                   </div>
 
-                  <div class="card" id="tab-contracts" hidden><h3>Contrats</h3><div id="contracts"></div></div>
-                  <div class="card" id="tab-eco" hidden><h3>Économie</h3><div id="eco"></div></div>
+                  <div id="tab-contracts" hidden><h3>Contrats</h3><div id="contracts"></div></div>
+                  <div id="tab-eco" hidden><h3>Économie</h3><div id="eco"></div></div>
                 </div>
 
-                <div>
-                  <canvas id="view" width="1200" height="720"></canvas>
+                <div class="panel">
+                  <canvas id="view"></canvas>
                 </div>
               </div>
 
@@ -180,116 +166,173 @@ jobs:
 
               <script>
                 (function(){{
-                  const mode = document.getElementById('mode');
-                  const standalone = (navigator.standalone === true) ||
-                    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
-                  mode.textContent = 'Mode: ' + (standalone ? 'app' : 'web');
-
-                  const btnUpd = document.getElementById('btnUpdate');
-                  btnUpd.onclick = async () => {{
+                  const upd=document.getElementById('btnUpdate');
+                  upd.onclick=async()=>{{
                     try {{
-                      if ('caches' in window) {{ for (const k of await caches.keys()) await caches.delete(k); }}
-                      if ('serviceWorker' in navigator) {{
-                        const regs = await navigator.serviceWorker.getRegistrations();
-                        for (const r of regs) await r.unregister();
-                      }}
-                    }} catch (e) {{}}
+                      if('caches'in window){{for(const k of await caches.keys()) await caches.delete(k);}}
+                      if('serviceWorker'in navigator){{for(const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();}}
+                    }}catch(e){{}}
                     location.replace('./?fresh={VER}');
                   }};
-
-                  const btnInstall = document.getElementById('btnInstall');
-                  if (!standalone) {{
-                    let deferred;
-                    window.addEventListener('beforeinstallprompt', (e) => {{
-                      e.preventDefault(); deferred = e; btnInstall.hidden = false;
-                    }});
-                    btnInstall.onclick = () => {{ if (deferred) {{ deferred.prompt(); deferred = null; btnInstall.hidden = true; }} }};
-                  }}
-
-                  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
+                  const inst=document.getElementById('btnInstall');
+                  let deferred; window.addEventListener('beforeinstallprompt',e=>{{e.preventDefault();deferred=e;inst.hidden=false}});
+                  inst.onclick=()=>{{ if(deferred){{deferred.prompt(); deferred=null; inst.hidden=true;}} }};
+                  if('serviceWorker'in navigator) navigator.serviceWorker.register('./sw.js');
                 }})();
               </script>
 
               <script src="./app.js?{VER}"></script>
-            </body>
-            </html>
+            </body></html>
           """), encoding="utf-8")
 
-          # -------- app.js --------
+          # JS : rendu cartoon + HiDPI + badges
           (out/"app.js").write_text(textwrap.dedent(r"""
-            // Panneau d'erreurs visible
+            // ===== Error pane =====
             (function(){
               const box=document.getElementById('err');
-              const show=(t,m)=>{ box.classList.add('show'); box.textContent += `\n[${t}] ${m}`; };
-              addEventListener('error',e=>show('error', e.message||e));
-              addEventListener('unhandledrejection',e=>show('promise', e.reason||e));
-              console.log('[TK] boot v10');
+              const log=(t,m)=>{box.classList.add('show');box.textContent+=`\n[${t}] ${m}`;}
+              addEventListener('error',e=>log('error',e.message||e));
+              addEventListener('unhandledrejection',e=>log('promise',e.reason||e));
+              console.log('[TK] v12 boot');
             })();
 
-            // Villes (fallback intégré)
             const CITIES=[
-              {id:'A',name:'Port-Est',x:120,y:520},
-              {id:'B',name:'Valbois',x:360,y:220},
-              {id:'C',name:'Fer-sur-Lac',x:760,y:180},
-              {id:'D',name:'Grainville',x:1040,y:520},
-              {id:'E',name:'Cap-Sud',x:560,y:560},
-              {id:'F',name:'Nordacier',x:1020,y:120}
+              {id:'A',name:'Port-Est',x:140,y:440,pop:52},
+              {id:'B',name:'Valbois',x:320,y:210,pop:35},
+              {id:'C',name:'Fer-sur-Lac',x:700,y:160,pop:44},
+              {id:'D',name:'Grainville',x:980,y:480,pop:47},
+              {id:'E',name:'Cap-Sud',x:540,y:520,pop:51},
+              {id:'F',name:'Nordacier',x:1000,y:120,pop:40}
             ];
+            const ROADS=[
+              ['A','B'],['B','C'],['C','D'],['A','E'],['E','D'],['B','E']
+            ];
+
             const $=id=>document.getElementById(id);
 
+            // UI lists
             function fillCities(){
-              const sels=[$('cityA'),$('cityB'),$('from'),$('to')];
-              for(const sel of sels){
-                if(!sel) continue;
-                sel.innerHTML='';
-                for(const c of CITIES){
-                  const o=document.createElement('option');
-                  o.value=c.id; o.textContent=c.name;
-                  sel.appendChild(o);
-                }
-              }
-              if($('cityA')) $('cityA').value='A';
-              if($('cityB')) $('cityB').value='E';
-              if($('from')) $('from').value='A';
-              if($('to')) $('to').value='B';
+              const fill=(sel)=>{ sel.innerHTML=''; for(const c of CITIES){ const o=document.createElement('option'); o.value=c.id;o.textContent=c.name;sel.appendChild(o);} };
+              ['cityA','cityB','from','to'].map($).forEach(s=>s&&fill(s));
+              if($('cityA')) $('cityA').value='A'; if($('cityB')) $('cityB').value='E';
+              if($('from')) $('from').value='A'; if($('to')) $('to').value='B';
             }
 
-            // Canvas simple (ne plante pas)
-            const view=$('view'), ctx=view.getContext('2d');
+            // ===== Canvas & HiDPI =====
+            const canvas=$('view'), ctx=canvas.getContext('2d');
+            function resize(){
+              const dpr=Math.max(1,window.devicePixelRatio||1);
+              const r=canvas.getBoundingClientRect();
+              const w=Math.max(700,r.width), h=Math.max(380, r.height||window.innerHeight*0.56);
+              canvas.width=Math.round(w*dpr); canvas.height=Math.round(h*dpr);
+              canvas.style.height=h+'px';
+              ctx.setTransform(dpr,0,0,dpr,0,0);
+            }
+            window.addEventListener('resize',resize);
+
+            // ===== Drawing helpers =====
+            function roundedRectPath(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+            function drawMap(){
+              const w=canvas.width/(window.devicePixelRatio||1), h=canvas.height/(window.devicePixelRatio||1);
+              // sea
+              const seaGrad=ctx.createLinearGradient(0,0,0,h);
+              seaGrad.addColorStop(0,'#0a3d66'); seaGrad.addColorStop(1,'#08304f');
+              ctx.fillStyle=seaGrad; ctx.fillRect(0,0,w,h);
+              // land shape (large polygon)
+              ctx.save();
+              ctx.beginPath();
+              ctx.moveTo(w*0.22,0);
+              ctx.bezierCurveTo(w*0.15,h*0.15,w*0.18,h*0.32,w*0.26,h*0.38);
+              ctx.bezierCurveTo(w*0.36,h*0.48,w*0.58,h*0.46,w*0.70,h*0.40);
+              ctx.bezierCurveTo(w*0.86,h*0.32,w*0.92,h*0.20,w, h*0.22);
+              ctx.lineTo(w,h); ctx.lineTo(w*0.22,h); ctx.closePath();
+              const landGrad=ctx.createLinearGradient(0,0,0,h);
+              landGrad.addColorStop(0,'#7edc69'); landGrad.addColorStop(1,'#4fae4b');
+              ctx.fillStyle=landGrad; ctx.fill();
+              // beach edge
+              ctx.strokeStyle='rgba(253,216,120,.85)'; ctx.lineWidth=10; ctx.stroke();
+              ctx.restore();
+
+              // grid soft
+              ctx.save();
+              ctx.strokeStyle='rgba(255,255,255,.06)'; ctx.lineWidth=1;
+              for(let gx=0; gx<w; gx+=80){ ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,h); ctx.stroke(); }
+              for(let gy=0; gy<h; gy+=80){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(w,gy); ctx.stroke(); }
+              ctx.restore();
+            }
+            function cityById(id){ return CITIES.find(c=>c.id===id); }
+            function drawRoads(){
+              ctx.lineJoin='round'; ctx.lineCap='round';
+              for(const [a,b] of ROADS){
+                const A=cityById(a), B=cityById(b);
+                // shadow
+                ctx.strokeStyle='rgba(0,0,0,.45)'; ctx.lineWidth=10; ctx.beginPath(); ctx.moveTo(A.x,B.y+2); ctx.lineTo(B.x,A.y+2); ctx.stroke();
+                // asphalt
+                ctx.strokeStyle='#2b3a52'; ctx.lineWidth=8; ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
+                // center line
+                ctx.setLineDash([10,10]); ctx.strokeStyle='#f6f1a0'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
+                ctx.setLineDash([]);
+              }
+            }
+            function drawCity(c){
+              // halo
+              const grd=ctx.createRadialGradient(c.x,c.y,2,c.x,c.y,22);
+              grd.addColorStop(0,'rgba(255,255,255,.9)'); grd.addColorStop(1,'rgba(255,255,255,0)');
+              ctx.fillStyle=grd; ctx.beginPath(); ctx.arc(c.x,c.y,22,0,Math.PI*2); ctx.fill();
+              // pin
+              ctx.fillStyle='#0e2b51'; ctx.strokeStyle='#0a83ff'; ctx.lineWidth=2.5;
+              roundedRectPath(c.x-18,c.y-22,36,28,8); ctx.fill(); ctx.stroke();
+              // name badge
+              ctx.fillStyle='white'; ctx.font='12px 700 system-ui';
+              ctx.textAlign='center'; ctx.textBaseline='top';
+              ctx.fillText(c.name, c.x, c.y+10);
+              // population chip
+              ctx.fillStyle='#1f6feb'; roundedRectPath(c.x-12,c.y-34,24,16,6); ctx.fill();
+              ctx.fillStyle='#fff'; ctx.font='10px 800 system-ui'; ctx.textBaseline='middle';
+              ctx.fillText(String(c.pop), c.x, c.y-26);
+            }
+            function drawBadges(){
+              // fake demand badges near roads
+              const badges=[{x:260,y:360,col:'#ffd54d',txt:'18'},
+                            {x:480,y:300,col:'#ff6f6f',txt:'26'},
+                            {x:640,y:420,col:'#77e085',txt:'12'}];
+              for(const b of badges){
+                ctx.save();
+                ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=8; ctx.shadowOffsetY=3;
+                ctx.fillStyle=b.col; ctx.beginPath(); ctx.arc(b.x,b.y,18,0,Math.PI*2); ctx.fill();
+                ctx.restore();
+                ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(b.x,b.y,18,0,Math.PI*2); ctx.stroke();
+                ctx.fillStyle='#222'; ctx.font='12px 800 system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
+                ctx.fillText(b.txt,b.x,b.y+1);
+              }
+            }
+
             function draw(){
-              ctx.fillStyle='#0b0f16'; ctx.fillRect(0,0,view.width,view.height);
-              ctx.fillStyle='#9aa4b2';
-              ctx.font='12px system-ui';
-              for(const c of CITIES){
-                ctx.fillRect(c.x-2,c.y-2,4,4);
-                ctx.fillText(c.name,c.x-22,c.y-8);
-              }
-              requestAnimationFrame(draw);
+              resize();
+              drawMap();
+              drawRoads();
+              for(const c of CITIES) drawCity(c);
+              drawBadges();
             }
 
-            // Onglets
-            document.querySelectorAll('.tabs button').forEach(b=>{
+            // Tabs
+            document.querySelectorAll('.tab').forEach(b=>{
               b.onclick=()=>{
-                document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));
+                document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
                 b.classList.add('active');
                 const id=b.dataset.tab;
-                for(const t of ['build','fleet','contracts','eco']){
-                  const el=document.getElementById('tab-'+t);
-                  if(el) el.hidden=(t!==id);
-                }
+                ['build','fleet','contracts','eco'].forEach(t=>{
+                  const el=document.getElementById('tab-'+t); if(el) el.hidden=(t!==id);
+                });
               };
             });
 
-            // Actions (stubs)
+            // Buttons (stubs)
             const br=$('buildRoad'), bt=$('buyTruck');
             if(br) br.onclick=()=>alert('Route construite / améliorée (démo)');
             if(bt) bt.onclick=()=>alert('Camion acheté (démo)');
 
-            // Init
-            document.addEventListener('DOMContentLoaded', ()=>{
-              try{ fillCities(); }catch(e){ console.error(e); }
-              try{ draw(); }catch(e){ console.error(e); }
-            });
+            document.addEventListener('DOMContentLoaded', ()=>{ fillCities(); draw(); });
           """), encoding="utf-8")
           PY
 
