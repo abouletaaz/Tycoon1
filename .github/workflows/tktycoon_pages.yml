@@ -1,4 +1,4 @@
-name: SimAgri Tycoon — v14 (force update + bugfix)
+name: SimAgri Tycoon — v15 (fix JS, force update)
 
 on:
   push:
@@ -26,14 +26,15 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           import json, pathlib, textwrap
-          VER="v14"  # <- bump = force update
-          out=pathlib.Path("_site"); out.mkdir(parents=True, exist_ok=True)
+          VER="v15"  # bump -> force update everywhere
 
-          # -------- manifest --------
+          out = pathlib.Path("_site"); out.mkdir(parents=True, exist_ok=True)
+
+          # ---------------- Manifest ----------------
           (out/"manifest.webmanifest").write_text(json.dumps({
             "name":"SimAgri Tycoon",
             "short_name":"SimAgri",
-            "start_url":"./?fresh="+VER,  # ouverture toujours avec fresh
+            "start_url":"./?fresh="+VER,
             "scope":"./",
             "display":"standalone",
             "background_color":"#0b2942",
@@ -43,26 +44,28 @@ jobs:
               {"src":"icon-512.png","sizes":"512x512","type":"image/png"}
             ]
           }, indent=2), encoding="utf-8")
+
+          # tiny placeholder icon
           tiny=bytes.fromhex("89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C4890000000A49444154789C6360000002000154010A9B0000000049454E44AE426082")
           for f in ("icon-192.png","icon-512.png","apple-touch-icon.png"):
-            (out/f).write_bytes(tiny)
+              (out/f).write_bytes(tiny)
 
-          # -------- service worker (purge agressive) --------
+          # ---------------- Service Worker ----------------
           (out/"sw.js").write_text(textwrap.dedent(f"""
             const CACHE='simagri-{VER}';
             const ASSETS=['./','./index.html?{VER}','./style.css?{VER}','./app.js?{VER}','./manifest.webmanifest','./apple-touch-icon.png'];
             self.addEventListener('install',e=>{{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));}});
             self.addEventListener('activate',e=>{{
-              e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))) .then(()=>self.clients.claim()));
+              e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))).then(()=>self.clients.claim());
             }});
             self.addEventListener('fetch',e=>{{
               const u=new URL(e.request.url);
-              if(u.searchParams.has('fresh')){{ return e.respondWith(fetch(e.request)); }}
-              e.respondWith(caches.match(e.request,{ignoreSearch:true}).then(r=>r||fetch(e.request)));
+              if(u.searchParams.has('fresh')){{ e.respondWith(fetch(e.request)); return; }}
+              e.respondWith(caches.match(e.request,{{ignoreSearch:true}}).then(r=>r||fetch(e.request)));
             }});
           """), encoding="utf-8")
 
-          # -------- style --------
+          # ---------------- CSS ----------------
           (out/"style.css").write_text(textwrap.dedent("""
             :root{--blue:#1f6feb;--blue2:#3489ff;--sea1:#0a3d66;--sea2:#08304f;--land1:#7edc69;--land2:#4fae4b;--sand:#f5d77a;--panel:#101827;--line:#1d2b47;--txt:#f2f6ff;--ok:#2ed77c;--warn:#ffd54d;--bad:#ff6f6f}
             *{box-sizing:border-box}html,body{height:100%}body{margin:0;background:linear-gradient(180deg,#0b1526,#0e1b30 60%,#0b1526);color:var(--txt);font:14px system-ui,Segoe UI,Roboto}
@@ -82,7 +85,7 @@ jobs:
             #err.show{display:block}
           """), encoding="utf-8")
 
-          # -------- index.html --------
+          # ---------------- HTML ----------------
           (out/"index.html").write_text(textwrap.dedent(f"""
             <!doctype html><html lang="fr"><head>
               <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -161,7 +164,7 @@ jobs:
               <div id="err"></div>
 
               <script>
-                // Boutons de mise à jour / install
+                // Update / install buttons + SW registration
                 (function(){
                   const upd=document.getElementById('btnUpdate');
                   upd.onclick=async()=>{
@@ -182,9 +185,9 @@ jobs:
             </body></html>
           """), encoding="utf-8")
 
-          # -------- app.js --------
+          # ---------------- JS (game) ----------------
           (out/"app.js").write_text(textwrap.dedent(r"""
-            // ===== Error pane =====
+            // Error pane
             (function(){
               const box=document.getElementById('err');
               const log=(t,m)=>{box.classList.add('show');box.textContent+=`\n[${t}] ${m}`;}
@@ -192,7 +195,6 @@ jobs:
               addEventListener('unhandledrejection',e=>log('promise',e.reason||e));
             })();
 
-            // --- Data ---
             const PRODUCTS={ grain:{name:'Blé'}, milk:{name:'Lait'}, logs:{name:'Grumes'}, planks:{name:'Planches'} };
             const CITIES=[
               {id:'A',name:'Ferme-Marine',x:140,y:440, inds:{farm:['grain'], dairy:['milk']}},
@@ -205,7 +207,6 @@ jobs:
             let ROADS=[ ['A','B',1], ['B','C',1], ['C','D',1], ['A','E',2], ['E','D',2], ['B','E',1] ];
             const TRUCK_TYPES={van:{name:'Fourgon',cap:4,fuel:0.6,cost:12000,speed:55}, rigid:{name:'Porteur',cap:8,fuel:1.0,cost:28000,speed:65}, semi:{name:'Semi',cap:16,fuel:1.8,cost:55000,speed:75}};
 
-            // --- State ---
             const S = JSON.parse(localStorage.getItem('simagri_save')||'null') || {
               money:120000, day:1, fuelPrice:1.7, maintDay:120,
               roads: ROADS, trucks: [], jobs: [], revenueYesterday:0
@@ -275,7 +276,6 @@ jobs:
             function renderFleet(){ const box=$('fleetList'); if(!box) return; box.innerHTML=''; for(const t of S.trucks){ const type=TRUCK_TYPES[t.type]; const pct=Math.round(t.prog*100); const d=document.createElement('div'); d.style.cssText='background:#0f1b2e;border:1px solid #1b2a4a;border-radius:12px;padding:8px;margin-bottom:6px'; d.innerHTML=`<b>${type.name}</b> ${t.from}→${t.to} • ${t.load}u • ${t.minutes}m <div style="height:8px;background:#0b1322;border:1px solid #1a2b4b;border-radius:6px;margin-top:4px"><div style="width:${pct}%;height:100%;background:linear-gradient(90deg,#2ed77c,#13b566);border-radius:6px"></div></div>`; box.appendChild(d);} }
             function renderContracts(){ const box=$('contractList'); if(!box) return; box.innerHTML=''; if(!S.jobs.length) regenContracts(); for(const k of S.jobs){ const g=PRODUCTS[k.good].name; const d=document.createElement('div'); d.style.cssText='background:#0f1b2e;border:1px solid #1b2a4a;border-radius:12px;padding:8px;margin-bottom:6px'; d.innerHTML=`<b>${g}</b> • ${k.qty}u — ${k.from}→${k.to} — <b>${fmt(k.price)}$</b> <div style="margin-top:6px"><button class="btn secondary" id="acc_${k.id}">Accepter</button></div>`; box.appendChild(d); d.querySelector(`#acc_${k.id}`).onclick=()=>{ if(levelBetween(k.from,k.to)===0){ alert('Construis d’abord la route.'); return; } S.money+=k.price; S.jobs=S.jobs.filter(x=>x.id!==k.id); renderHUD(); renderContracts(); save(); }; } }
 
-            // ---- Canvas render ----
             const canvas=$('view'), ctx=canvas.getContext('2d');
             function resize(){ const dpr=Math.max(1,window.devicePixelRatio||1); const r=canvas.getBoundingClientRect(); const w=Math.max(700,r.width), h=Math.max(380,r.height||window.innerHeight*0.58); canvas.width=Math.round(w*dpr); canvas.height=Math.round(h*dpr); canvas.style.height=h+'px'; ctx.setTransform(dpr,0,0,dpr,0,0); }
             addEventListener('resize',()=>{ resize(); draw(); });
@@ -286,9 +286,7 @@ jobs:
             function drawBadges(){ const B=[{x:260,y:360,col:'#ffd54d',txt:'Blé'},{x:480,y:300,col:'#9ad0ff',txt:'Planches'},{x:640,y:420,col:'#77e085',txt:'Lait'}]; for(const b of B){ ctx.save(); ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=8; ctx.shadowOffsetY=3; ctx.fillStyle=b.col; ctx.beginPath(); ctx.arc(b.x,b.y,18,0,Math.PI*2); ctx.fill(); ctx.restore(); ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(b.x,b.y,18,0,Math.PI*2); ctx.stroke(); ctx.fillStyle='#222'; ctx.font='11px 800 system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(b.txt,b.x,b.y+1); } }
             function draw(){ resize(); drawMap(); for(const [a,b,l] of S.roads) drawRoad(a,b,l); for(const c of CITIES) drawCity(c); drawBadges(); ctx.fillStyle='#ffb32d'; for(const t of S.trucks){ const A=cityBy(t.from),B=cityBy(t.to); const x=A.x+(B.x-A.x)*t.prog, y=A.y+(B.y-A.y)*t.prog; ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill(); } }
 
-            // ---- Mount (TOUTES les liaisons ICI —> plus d'erreur) ----
             function mount(){
-              // Tabs
               document.querySelectorAll('.tab').forEach(b=>{
                 b.onclick=()=>{ document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); b.classList.add('active');
                   const id=b.dataset.tab; ['build','fleet','contracts','eco'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.hidden=(t!==id); });
